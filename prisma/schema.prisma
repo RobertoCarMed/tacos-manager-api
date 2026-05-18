@@ -1,0 +1,99 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  WAITER
+  COOK
+}
+
+enum OrderStatus {
+  PENDING
+  UPDATED
+  PREPARING
+  READY
+}
+
+model Taqueria {
+  id        String    @id @default(uuid())
+  name      String
+  createdAt DateTime  @default(now())
+
+  users     User[]
+  products  Product[]
+  orders    Order[]
+}
+
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  password     String
+  name         String
+  role         UserRole
+  createdAt    DateTime   @default(now())
+
+  taqueriaId   String
+  taqueria     Taqueria   @relation(fields: [taqueriaId], references: [id])
+
+  orders       Order[]
+}
+
+model Product {
+  id            String      @id @default(uuid())
+  name          String
+  price         Float
+  imageUrl      String?
+  complements   String[]
+
+  createdAt     DateTime    @default(now())
+
+  taqueriaId    String
+  taqueria      Taqueria    @relation(fields: [taqueriaId], references: [id])
+
+  items         Item[]
+}
+
+model Order {
+  id            String        @id @default(uuid())
+  customerName  String
+  status        OrderStatus   @default(PENDING)
+  total         Float         @default(0)
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  taqueriaId    String
+  taqueria      Taqueria      @relation(fields: [taqueriaId], references: [id])
+
+  userId        String
+  user          User          @relation(fields: [userId], references: [id])
+
+  plates        Plate[]
+}
+
+model Plate {
+  id            String      @id @default(uuid())
+  name          String
+
+  orderId       String
+  order         Order       @relation(fields: [orderId], references: [id])
+
+  items         Item[]
+}
+
+model Item {
+  id                    String      @id @default(uuid())
+  quantity              Int
+  selectedComplements   String[]
+  isNew                 Boolean     @default(false)
+
+  productId             String
+  product               Product     @relation(fields: [productId], references: [id])
+
+  plateId               String
+  plate                 Plate       @relation(fields: [plateId], references: [id])
+}

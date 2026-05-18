@@ -1,0 +1,6 @@
+allowBuilds:
+  '@nestjs/core': false
+  '@prisma/engines': true
+  bcrypt: true
+  prisma: true
+  unrs-resolver: false
