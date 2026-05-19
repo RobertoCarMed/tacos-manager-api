@@ -19,13 +19,14 @@ enum OrderStatus {
 }
 
 model Taqueria {
-  id        String    @id @default(uuid())
-  name      String
-  createdAt DateTime  @default(now())
+  id             String    @id @default(uuid())
+  name           String    @unique
+  restaurantCode String    @unique
+  createdAt      DateTime  @default(now())
 
-  users     User[]
-  products  Product[]
-  orders    Order[]
+  users          User[]
+  products       Product[]
+  orders         Order[]
 }
 
 model User {

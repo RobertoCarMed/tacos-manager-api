@@ -551,3 +551,108 @@ Whenever a new feature is implemented in this project:
 - `PrismaService` remains singleton-based with `OnModuleInit`.
 - Auth domain separated from data access (`UsersService`) to avoid logic duplication.
 - Base ready for future role-based guards and Socket.IO realtime integration under JWT context.
+
+---
+
+# Backend Migration Progress (FASE 3 - Products Module NestJS + Prisma)
+
+## Implemented: Professional Products Catalog in PostgreSQL
+
+### New backend module
+
+- `src/products`
+  - `products.module.ts`
+  - `products.controller.ts`
+  - `products.service.ts`
+  - `dto/create-product.dto.ts`
+  - `dto/update-product.dto.ts`
+  - `interfaces/authenticated-user.interface.ts`
+
+### New products endpoints
+
+- `POST /products` (COOK only)
+- `GET /products` (COOK + WAITER)
+- `GET /products/:id` (COOK + WAITER)
+- `PATCH /products/:id` (COOK only)
+- `DELETE /products/:id` (COOK only)
+
+All endpoints are protected with JWT (`JwtAuthGuard`) and role authorization (`RolesGuard` + `Roles` decorator).
+
+### Multi-taquerÃ­a ownership model
+
+- Product ownership is derived from authenticated `request.user.taqueriaId`.
+- Backend never accepts `taqueriaId` from frontend for product ownership.
+- Users can only read/modify/delete products belonging to their own taquerÃ­a.
+- Cross-taquerÃ­a access is blocked with explicit authorization checks.
+
+### Business validations implemented
+
+- `name` required
+- `price` required and positive (`> 0`)
+- `complements` optional with max 3 values
+- `imageUrl` optional and URL validated
+- Product existence checks for read/update/delete
+- Ownership checks for update/delete operations
+
+### Security and error handling
+
+- `ForbiddenException` for unauthorized role actions and cross-taquerÃ­a access
+- `NotFoundException` for non-existing products
+- `BadRequestException` for invalid complements/business validation failures
+- `UnauthorizedException` handled through JWT guard flow
+- Responses are intentionally minimal (no oversized relations)
+
+### Architecture notes
+
+- Clean controller/service separation maintained.
+- Strong typing preserved (no `any`).
+- Prisma access remains centralized via `PrismaService` singleton.
+- Design is ready for future Socket.IO realtime events, image upload pipelines, analytics, soft delete, and audit trails.
+
+---
+
+# Backend Migration Progress (FASE 4 - Multi-Taqueria Integrity Fix)
+
+## Implemented: Anti-duplication registration + join-taqueria flow
+
+### Database architecture updates
+
+- `Taqueria.name` is now unique.
+- `Taqueria.restaurantCode` added as unique short code.
+- `restaurantCode` is generated automatically during taqueria creation.
+
+### Auth flow changes
+
+- `POST /auth/register`
+  - If taqueria does not exist:
+    - creates taqueria
+    - generates unique `restaurantCode`
+    - creates user
+    - returns `accessToken`, `user`, `taqueria`
+  - If taqueria already exists:
+    - does NOT create duplicate taqueria
+    - does NOT create user
+    - returns:
+      - `message: "Taquería ya existente"`
+      - `taqueriaExists: true`
+      - `taqueriaName`
+      - `canJoin: true`
+
+- `POST /auth/join-taqueria`
+  - Requires existing taqueria by `taqueriaName`
+  - Creates user linked to existing taqueria
+  - Returns `accessToken`, `user`, `taqueria`
+
+### Multi-tenant business guarantees
+
+- No duplicate taquerias by name.
+- Users in the same taqueria share the same `taqueriaId`.
+- Shared catalog consistency is preserved (products/orders/realtime scope by taqueria).
+- Cross-tenant isolation remains enforced through `taqueriaId` ownership checks.
+
+### Technical notes
+
+- Prisma migration applied:
+  - `20260518045112_multi_taqueria_uniqueness`
+- Register/join logic split cleanly in `AuthService` and `UsersService`.
+- Unique restaurant code generation includes collision retry logic.

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { User, UserRole } from '@prisma/client';
+import { Taqueria, User, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -12,8 +12,23 @@ export class UsersService {
     });
   }
 
-  createUserWithTaqueria(data: {
-    taqueriaName: string;
+  findTaqueriaByName(name: string): Promise<Taqueria | null> {
+    return this.prisma.taqueria.findUnique({
+      where: { name },
+    });
+  }
+
+  createTaqueria(data: { name: string; restaurantCode: string }): Promise<Taqueria> {
+    return this.prisma.taqueria.create({
+      data: {
+        name: data.name,
+        restaurantCode: data.restaurantCode,
+      },
+    });
+  }
+
+  createUserInTaqueria(data: {
+    taqueriaId: string;
     name: string;
     email: string;
     password: string;
@@ -25,11 +40,7 @@ export class UsersService {
         email: data.email,
         password: data.password,
         role: data.role,
-        taqueria: {
-          create: {
-            name: data.taqueriaName,
-          },
-        },
+        taqueriaId: data.taqueriaId,
       },
       include: {
         taqueria: true,

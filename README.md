@@ -147,3 +147,42 @@ Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
 
 - `DATABASE_URL`: PostgreSQL connection string.
 - `JWT_SECRET`: signing secret for access tokens.
+
+### Multi-taqueria integrity update
+
+- `Taqueria.name` is unique.
+- `Taqueria.restaurantCode` is unique and generated automatically on taqueria creation.
+- `POST /auth/register` no longer creates duplicated taquerias:
+  - creates taqueria only when name does not exist
+  - returns frontend-friendly join signal when taqueria already exists
+- `POST /auth/join-taqueria` allows user creation inside an existing taqueria.
+
+### Products phase 3 (Catalog + Multi-taqueria + Roles)
+
+- `src/products/products.module.ts`
+  - Registers products controller/service.
+- `src/products/products.controller.ts`
+  - CRUD endpoints with JWT protection and role-based access.
+- `src/products/products.service.ts`
+  - Encapsulates product business logic, ownership validation, and Prisma access.
+- `src/products/dto/create-product.dto.ts`
+  - Validates product creation payload (`name`, `price`, `imageUrl`, `complements`).
+- `src/products/dto/update-product.dto.ts`
+  - Validates partial updates with same business constraints.
+- `src/products/interfaces/authenticated-user.interface.ts`
+  - Typed auth user context extracted from `request.user`.
+
+#### Products endpoints
+
+- `POST /products` (COOK)
+- `GET /products` (COOK, WAITER)
+- `GET /products/:id` (COOK, WAITER)
+- `PATCH /products/:id` (COOK)
+- `DELETE /products/:id` (COOK)
+
+#### Core rules
+
+- Every product belongs to one taqueria.
+- Backend derives taqueria ownership from JWT user context only.
+- Cross-taqueria access is forbidden.
+- Complements are limited to max 3 items.
