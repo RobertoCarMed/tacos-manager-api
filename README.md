@@ -150,12 +150,106 @@ Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
 
 ### Multi-taqueria integrity update
 
-- `Taqueria.name` is unique.
-- `Taqueria.restaurantCode` is unique and generated automatically on taqueria creation.
-- `POST /auth/register` no longer creates duplicated taquerias:
-  - creates taqueria only when name does not exist
-  - returns frontend-friendly join signal when taqueria already exists
-- `POST /auth/join-taqueria` allows user creation inside an existing taqueria.
+- `Taqueria.name` is **not unique**.
+- `Taqueria.restaurantCode` is the real unique tenant identifier and is generated automatically.
+- `POST /auth/register` works as a two-phase state machine (single endpoint).
+- No separate join endpoint is required.
+- `Taqueria` stores optional metadata for creation flow:
+  - `phone`
+  - `address`
+  - `city`
+  - `state`
+
+#### Smart register states (single endpoint)
+
+Phase 1 request:
+
+```json
+{
+  "name": "User",
+  "email": "user@demo.com",
+  "password": "secret123",
+  "role": "COOK",
+  "taqueriaName": "Taqueria El Guero"
+}
+```
+
+`0` matches response:
+
+```json
+{
+  "taqueriaMatches": 0,
+  "canCreateNewTaqueria": true,
+  "requiresTaqueriaInfo": true,
+  "message": "No encontramos una taquería con este nombre. Puedes crear una nueva."
+}
+```
+
+`1` match response:
+
+```json
+{
+  "taqueriaMatches": 1,
+  "canJoinExistingTaqueria": true,
+  "canCreateNewTaqueria": true,
+  "taquerias": [
+    {
+      "id": "uuid",
+      "name": "Taqueria El Guero",
+      "restaurantCode": "TM-4821"
+    }
+  ],
+  "message": "Encontramos una taquería con este nombre."
+}
+```
+
+`N` matches response:
+
+```json
+{
+  "taqueriaMatches": 3,
+  "canJoinExistingTaqueria": true,
+  "canCreateNewTaqueria": true,
+  "taquerias": [
+    { "id": "uuid-1", "name": "Taqueria El Guero", "restaurantCode": "TM-4821" },
+    { "id": "uuid-2", "name": "Taqueria El Guero", "restaurantCode": "TM-9182" }
+  ],
+  "message": "Encontramos varias taquerías con este nombre."
+}
+```
+
+Phase 2 join request:
+
+```json
+{
+  "name": "User",
+  "email": "user@demo.com",
+  "password": "secret123",
+  "role": "WAITER",
+  "taqueriaName": "Taqueria El Guero",
+  "confirmJoinExistingTaqueria": true,
+  "selectedRestaurantCode": "TM-4821"
+}
+```
+
+Phase 2 create request:
+
+```json
+{
+  "name": "User",
+  "email": "user@demo.com",
+  "password": "secret123",
+  "role": "COOK",
+  "taqueriaName": "Taqueria El Guero",
+  "createNewTaqueria": true,
+  "taqueriaData": {
+    "phone": "5551231234",
+    "address": "Av. Centro 123",
+    "city": "CDMX",
+    "state": "CDMX"
+  }
+}
+```
 
 ### Products phase 3 (Catalog + Multi-taqueria + Roles)
 
@@ -186,3 +280,33 @@ Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
 - Backend derives taqueria ownership from JWT user context only.
 - Cross-taqueria access is forbidden.
 - Complements are limited to max 3 items.
+
+### Orders phase 4.1 (Core CRUD + append-only edit)
+
+- `src/orders/orders.module.ts`
+- `src/orders/orders.controller.ts`
+- `src/orders/orders.service.ts`
+- `src/orders/dto/create-order.dto.ts`
+- `src/orders/dto/update-order.dto.ts`
+- `src/orders/dto/update-order-status.dto.ts`
+
+Endpoints:
+- `POST /orders` (WAITER)
+- `GET /orders` (WAITER own orders, COOK all taqueria orders)
+- `GET /orders/:id` (ownership and role checks)
+- `PATCH /orders/:id` (WAITER, append-only editing)
+- `PATCH /orders/:id/status` (COOK only)
+
+Business rules:
+- No physical order delete (historical continuity).
+- Edited orders set `isUpdated = true`.
+- New items added during edit set `isNew = true`.
+- Existing plates/items are treated as immutable history; edits append new plates.
+- `tableNumber` is a required visual reference string (not numeric-only), e.g.:
+  - `Mesa 1`
+  - `Barra 3`
+  - `Pedido Uber`
+- Item `notes` is optional and supports:
+  - omitted
+  - empty string `""`
+  - regular string value

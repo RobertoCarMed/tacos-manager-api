@@ -13,15 +13,20 @@ enum UserRole {
 
 enum OrderStatus {
   PENDING
-  UPDATED
   PREPARING
   READY
+  DELIVERED
+  CANCELLED
 }
 
 model Taqueria {
   id             String    @id @default(uuid())
-  name           String    @unique
+  name           String
   restaurantCode String    @unique
+  phone          String?
+  address        String?
+  city           String?
+  state          String?
   createdAt      DateTime  @default(now())
 
   users          User[]
@@ -40,7 +45,7 @@ model User {
   taqueriaId   String
   taqueria     Taqueria   @relation(fields: [taqueriaId], references: [id])
 
-  orders       Order[]
+  waiterOrders Order[] @relation("WaiterOrders")
 }
 
 model Product {
@@ -59,42 +64,50 @@ model Product {
 }
 
 model Order {
-  id            String        @id @default(uuid())
-  customerName  String
-  status        OrderStatus   @default(PENDING)
-  total         Float         @default(0)
+  id          String      @id @default(uuid())
+  tableNumber String
+  status      OrderStatus @default(PENDING)
+  isUpdated   Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  taqueriaId  String
+  taqueria    Taqueria    @relation(fields: [taqueriaId], references: [id])
 
-  taqueriaId    String
-  taqueria      Taqueria      @relation(fields: [taqueriaId], references: [id])
+  waiterId    String
+  waiter      User        @relation("WaiterOrders", fields: [waiterId], references: [id])
 
-  userId        String
-  user          User          @relation(fields: [userId], references: [id])
+  plates      Plate[]
 
-  plates        Plate[]
+  @@index([taqueriaId, status])
+  @@index([waiterId])
 }
 
 model Plate {
-  id            String      @id @default(uuid())
-  name          String
+  id          String   @id @default(uuid())
+  plateNumber Int
+  isClosed    Boolean  @default(false)
+  createdAt   DateTime @default(now())
 
-  orderId       String
-  order         Order       @relation(fields: [orderId], references: [id])
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id])
 
-  items         Item[]
+  items       Item[]
+
+  @@index([orderId, plateNumber])
 }
 
 model Item {
-  id                    String      @id @default(uuid())
-  quantity              Int
-  selectedComplements   String[]
-  isNew                 Boolean     @default(false)
+  id                  String   @id @default(uuid())
+  quantity            Int
+  selectedComplements String[]
+  notes               String?
+  isNew               Boolean  @default(false)
+  createdAt           DateTime @default(now())
 
-  productId             String
-  product               Product     @relation(fields: [productId], references: [id])
+  productId           String
+  product             Product  @relation(fields: [productId], references: [id])
 
-  plateId               String
-  plate                 Plate       @relation(fields: [plateId], references: [id])
+  plateId             String
+  plate               Plate    @relation(fields: [plateId], references: [id])
 }

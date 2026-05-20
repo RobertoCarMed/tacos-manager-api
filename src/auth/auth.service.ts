@@ -2,13 +2,11 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
-  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { JoinTaqueriaDto } from './dto/join-taqueria.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { UsersService } from '../users/users.service';
@@ -21,53 +19,97 @@ export class AuthService {
   ) {}
 
   async register(registerDto: RegisterDto) {
-    const existingUser = await this.usersService.findByEmail(registerDto.email);
+    this.validateRegisterFlags(registerDto);
 
+    const existingUser = await this.usersService.findByEmail(registerDto.email);
     if (existingUser) {
       throw new ConflictException('Email already exists');
     }
 
-    const existingTaqueria = await this.usersService.findTaqueriaByName(registerDto.taqueriaName);
-    if (existingTaqueria) {
+    const taqueriaMatches = await this.usersService.findTaqueriasByName(registerDto.taqueriaName);
+
+    // Phase 1: discovery, no side effects.
+    if (!registerDto.confirmJoinExistingTaqueria && !registerDto.createNewTaqueria) {
+      if (taqueriaMatches.length === 0) {
+        return {
+          taqueriaMatches: 0,
+          canCreateNewTaqueria: true,
+          requiresTaqueriaInfo: true,
+          message: 'No encontramos una taquería con este nombre. Puedes crear una nueva.',
+        };
+      }
+
+      if (taqueriaMatches.length === 1) {
+        return {
+          taqueriaMatches: 1,
+          canJoinExistingTaqueria: true,
+          canCreateNewTaqueria: true,
+          taquerias: taqueriaMatches.map((taqueria) => ({
+            id: taqueria.id,
+            name: taqueria.name,
+            restaurantCode: taqueria.restaurantCode,
+          })),
+          message: 'Encontramos una taquería con este nombre.',
+        };
+      }
+
       return {
-        message: 'Taquería ya existente',
-        taqueriaExists: true,
-        taqueriaName: existingTaqueria.name,
-        canJoin: true,
+        taqueriaMatches: taqueriaMatches.length,
+        canJoinExistingTaqueria: true,
+        canCreateNewTaqueria: true,
+        taquerias: taqueriaMatches.map((taqueria) => ({
+          id: taqueria.id,
+          name: taqueria.name,
+          restaurantCode: taqueria.restaurantCode,
+        })),
+        message: 'Encontramos varias taquerías con este nombre.',
       };
     }
 
+    // Phase 2A: join existing taqueria.
+    if (registerDto.confirmJoinExistingTaqueria) {
+      if (!registerDto.selectedRestaurantCode) {
+        throw new BadRequestException(
+          'selectedRestaurantCode is required when confirmJoinExistingTaqueria is true.',
+        );
+      }
+      const taqueria = await this.usersService.findTaqueriaByRestaurantCode(
+        registerDto.selectedRestaurantCode,
+      );
+      if (!taqueria) {
+        throw new BadRequestException('Invalid selectedRestaurantCode.');
+      }
+
+      const hashedPassword = await bcrypt.hash(registerDto.password, 10);
+      const createdUser = await this.usersService.createUserInTaqueria({
+        taqueriaId: taqueria.id,
+        name: registerDto.name,
+        email: registerDto.email,
+        password: hashedPassword,
+        role: registerDto.role,
+      });
+
+      return this.buildAuthResponse(createdUser.id);
+    }
+
+    // Phase 2B: create new taqueria.
+    if (!registerDto.taqueriaData) {
+      throw new BadRequestException(
+        'taqueriaData is required when createNewTaqueria is true.',
+      );
+    }
+
     const hashedPassword = await bcrypt.hash(registerDto.password, 10);
-    const taqueria = await this.createTaqueriaWithUniqueCode(registerDto.taqueriaName);
+    const taqueria = await this.createTaqueriaWithUniqueCode({
+      name: registerDto.taqueriaName,
+      taqueriaData: registerDto.taqueriaData,
+    });
     const createdUser = await this.usersService.createUserInTaqueria({
       taqueriaId: taqueria.id,
       name: registerDto.name,
       email: registerDto.email,
       password: hashedPassword,
       role: registerDto.role,
-    });
-
-    return this.buildAuthResponse(createdUser.id);
-  }
-
-  async joinTaqueria(joinTaqueriaDto: JoinTaqueriaDto) {
-    const existingUser = await this.usersService.findByEmail(joinTaqueriaDto.email);
-    if (existingUser) {
-      throw new ConflictException('Email already exists');
-    }
-
-    const taqueria = await this.usersService.findTaqueriaByName(joinTaqueriaDto.taqueriaName);
-    if (!taqueria) {
-      throw new NotFoundException('Taquería not found. Please register it first.');
-    }
-
-    const hashedPassword = await bcrypt.hash(joinTaqueriaDto.password, 10);
-    const createdUser = await this.usersService.createUserInTaqueria({
-      taqueriaId: taqueria.id,
-      name: joinTaqueriaDto.name,
-      email: joinTaqueriaDto.email,
-      password: hashedPassword,
-      role: joinTaqueriaDto.role,
     });
 
     return this.buildAuthResponse(createdUser.id);
@@ -93,11 +135,52 @@ export class AuthService {
     return this.buildAuthResponse(user.id);
   }
 
-  private async createTaqueriaWithUniqueCode(name: string) {
+  private validateRegisterFlags(registerDto: RegisterDto): void {
+    if (registerDto.confirmJoinExistingTaqueria && registerDto.createNewTaqueria) {
+      throw new BadRequestException(
+        'confirmJoinExistingTaqueria and createNewTaqueria cannot both be true.',
+      );
+    }
+
+    if (registerDto.confirmJoinExistingTaqueria && registerDto.taqueriaData) {
+      throw new BadRequestException(
+        'taqueriaData is not allowed when confirmJoinExistingTaqueria is true.',
+      );
+    }
+
+    if (registerDto.createNewTaqueria && registerDto.selectedRestaurantCode) {
+      throw new BadRequestException(
+        'selectedRestaurantCode is not allowed when createNewTaqueria is true.',
+      );
+    }
+
+    if (registerDto.confirmJoinExistingTaqueria && !registerDto.selectedRestaurantCode) {
+      throw new BadRequestException(
+        'selectedRestaurantCode is required when confirmJoinExistingTaqueria is true.',
+      );
+    }
+  }
+
+  private async createTaqueriaWithUniqueCode(data: {
+    name: string;
+    taqueriaData: {
+      phone?: string;
+      address?: string;
+      city?: string;
+      state?: string;
+    };
+  }) {
     for (let attempt = 0; attempt < 10; attempt += 1) {
       const restaurantCode = this.generateRestaurantCode();
       try {
-        return await this.usersService.createTaqueria({ name, restaurantCode });
+        return await this.usersService.createTaqueria({
+          name: data.name,
+          restaurantCode,
+          phone: data.taqueriaData.phone,
+          address: data.taqueriaData.address,
+          city: data.taqueriaData.city,
+          state: data.taqueriaData.state,
+        });
       } catch (error: unknown) {
         if (
           error instanceof Prisma.PrismaClientKnownRequestError &&

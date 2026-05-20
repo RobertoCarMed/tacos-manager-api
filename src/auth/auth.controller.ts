@@ -1,7 +1,6 @@
 import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { AuthService } from './auth.service';
-import { JoinTaqueriaDto } from './dto/join-taqueria.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -20,11 +19,6 @@ export class AuthController {
   @Post('login')
   login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
-  }
-
-  @Post('join-taqueria')
-  joinTaqueria(@Body() joinTaqueriaDto: JoinTaqueriaDto) {
-    return this.authService.joinTaqueria(joinTaqueriaDto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

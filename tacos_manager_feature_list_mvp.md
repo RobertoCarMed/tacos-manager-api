@@ -638,10 +638,8 @@ All endpoints are protected with JWT (`JwtAuthGuard`) and role authorization (`R
       - `taqueriaName`
       - `canJoin: true`
 
-- `POST /auth/join-taqueria`
-  - Requires existing taqueria by `taqueriaName`
-  - Creates user linked to existing taqueria
-  - Returns `accessToken`, `user`, `taqueria`
+- Transitional endpoint (`POST /auth/join-taqueria`) was introduced in this phase
+  and later replaced in FASE 5 by the unified smart register state-machine.
 
 ### Multi-tenant business guarantees
 
@@ -656,3 +654,325 @@ All endpoints are protected with JWT (`JwtAuthGuard`) and role authorization (`R
   - `20260518045112_multi_taqueria_uniqueness`
 - Register/join logic split cleanly in `AuthService` and `UsersService`.
 - Unique restaurant code generation includes collision retry logic.
+
+---
+
+# Backend Migration Progress (FASE 5 - Smart Register State Machine)
+
+## Implemented: Single-endpoint intelligent register flow for React Native UX
+
+### Endpoint contract
+
+- `POST /auth/register` is now a 2-phase state-machine:
+
+1. Phase 1 (initial validation)
+   - Input: `name`, `email`, `password`, `role`, `taqueriaName`
+   - No writes to DB
+   - Response if taqueria exists:
+     - `taqueriaExists: true`
+     - `requiresConfirmation: true`
+     - `message: "Esta taquería ya existe. ¿Deseas unirte?"`
+   - Response if taqueria does not exist:
+     - `taqueriaExists: false`
+     - `requiresTaqueriaInfo: true`
+     - `message: "La taquería no existe. Completa los datos para crearla."`
+
+2. Phase 2 (final confirmation)
+   - Join existing taqueria:
+     - same payload + `confirmJoinExistingTaqueria: true`
+     - creates user in existing taqueria
+     - returns auth response with JWT
+   - Create new taqueria:
+     - same payload + `createNewTaqueria: true` + `taqueriaData`
+     - creates taqueria with unique `restaurantCode`
+     - creates user and returns auth response with JWT
+
+### Multi-tenant architecture guarantees
+
+- Single source of truth by taqueria name uniqueness (`Taqueria.name @unique`).
+- No duplicated taquerias by accidental register retries.
+- Users joining same taqueria share same `taqueriaId`, products, orders, and operational scope.
+
+### Database and model updates
+
+- `Taqueria` now includes:
+  - `restaurantCode` (unique)
+  - `phone` (optional)
+  - `address` (optional)
+  - `city` (optional)
+  - `state` (optional)
+- Prisma migration applied:
+  - `20260519021818_register_state_machine_flow`
+
+### Security and validation rules
+
+- Email uniqueness always enforced before any creation.
+- Confirmation flags are mutually exclusive.
+- No JWT is generated in Phase 1.
+- JWT is only generated after user creation.
+- Backend prevents confirmation bypass and inconsistent actions.
+
+### Frontend behavior alignment
+
+- React Native can keep single-screen registration UX.
+- Backend responses explicitly drive UI decisions (confirm join vs request taqueria data).
+- No separate `join-taqueria` endpoint is required in client flow.
+
+---
+
+# Backend Migration Progress (FASE 6 - SaaS Multi-Tenant by RestaurantCode)
+
+## Implemented: Same-name taquerias supported with unique tenant identity
+
+### Final multi-tenant architecture
+
+- `Taqueria.name` is no longer unique.
+- `Taqueria.restaurantCode` is the canonical unique tenant identifier.
+- Multiple taquerias can share the same display name safely.
+- Tenant sharing is defined by:
+  - same `taqueriaId`
+  - same `restaurantCode`
+
+Users under same tenant share:
+- products
+- orders
+- realtime scope
+- operational catalog and kitchen context
+
+### Register state-machine (single endpoint, frontend-aligned)
+
+Endpoint: `POST /auth/register`
+
+#### Phase 1 (discovery, no writes)
+
+Input:
+- `name`
+- `email`
+- `password`
+- `role`
+- `taqueriaName`
+
+State A: `0` matches
+
+```json
+{
+  "taqueriaMatches": 0,
+  "canCreateNewTaqueria": true,
+  "requiresTaqueriaInfo": true,
+  "message": "No encontramos una taquería con este nombre. Puedes crear una nueva."
+}
+```
+
+State B: `1` match
+
+```json
+{
+  "taqueriaMatches": 1,
+  "canJoinExistingTaqueria": true,
+  "canCreateNewTaqueria": true,
+  "taquerias": [
+    {
+      "id": "uuid",
+      "name": "Taquería El Güero",
+      "restaurantCode": "TM-4821"
+    }
+  ],
+  "message": "Encontramos una taquería con este nombre."
+}
+```
+
+State C: `N` matches
+
+```json
+{
+  "taqueriaMatches": 3,
+  "canJoinExistingTaqueria": true,
+  "canCreateNewTaqueria": true,
+  "taquerias": [
+    { "id": "uuid-1", "name": "Taquería El Güero", "restaurantCode": "TM-4821" },
+    { "id": "uuid-2", "name": "Taquería El Güero", "restaurantCode": "TM-9182" }
+  ],
+  "message": "Encontramos varias taquerías con este nombre."
+}
+```
+
+#### Phase 2 (final action)
+
+Case A: Join existing taqueria
+
+Input:
+- base fields +
+- `confirmJoinExistingTaqueria: true`
+- `selectedRestaurantCode: "TM-4821"`
+
+Behavior:
+- validates restaurant code
+- reuses existing `taqueriaId`
+- creates user
+- generates JWT
+
+Case B: Create new taqueria
+
+Input:
+- base fields +
+- `createNewTaqueria: true`
+- `taqueriaData` (phone/address/city/state optional details)
+
+Behavior:
+- creates new taqueria even if same name exists
+- generates unique `restaurantCode`
+- creates user
+- generates JWT
+
+### Frontend React Native integration contract
+
+Single-screen flow remains:
+1. User submits base form.
+2. Backend returns match-state.
+3. Frontend adapts UI:
+   - show taqueria list (by `restaurantCode`) for join
+   - or show extra taqueria form for creation
+4. Frontend re-submits to same endpoint with final confirmation flags.
+5. Backend returns auth response with JWT only after actual user creation.
+
+### Validation and security rules
+
+- Email uniqueness enforced.
+- `restaurantCode` uniqueness enforced.
+- `selectedRestaurantCode` required for join confirmation.
+- Confirmation flags are mutually exclusive.
+- Invalid join/create combinations are rejected.
+- Ownership model remains taqueria-scoped in downstream modules (Products/Orders).
+
+### Prisma updates
+
+- `Taqueria.name` uniqueness removed.
+- Migration applied:
+  - `20260519022139_multi_taqueria_same_name_support`
+
+---
+
+# Backend Migration Progress (ETAPA 4.1 - Orders Core CRUD)
+
+## Implemented: Orders module with immutable edit architecture
+
+### New backend module
+
+- `src/orders`
+  - `orders.module.ts`
+  - `orders.controller.ts`
+  - `orders.service.ts`
+  - `dto/create-order.dto.ts`
+  - `dto/update-order.dto.ts`
+  - `dto/update-order-status.dto.ts`
+  - `interfaces/authenticated-user.interface.ts`
+
+### SQL/domain models
+
+- `Order`
+  - `id`
+  - `taqueriaId`
+  - `waiterId`
+  - `tableNumber` (visual reference string)
+  - `status` (`PENDING`, `PREPARING`, `READY`, `DELIVERED`, `CANCELLED`)
+  - `isUpdated`
+  - `createdAt`
+  - `updatedAt`
+- `Plate`
+  - `id`
+  - `orderId`
+  - `plateNumber`
+  - `isClosed`
+  - `createdAt`
+- `Item`
+  - `id`
+  - `plateId`
+  - `productId`
+  - `quantity`
+  - `selectedComplements`
+  - `notes`
+  - `isNew`
+  - `createdAt`
+
+### Relationships
+
+- `Order` belongs to `Taqueria`
+- `Order` belongs to `User` (`waiter`)
+- `Order` has many `Plate`
+- `Plate` belongs to `Order`
+- `Plate` has many `Item`
+- `Item` belongs to `Plate`
+- `Item` belongs to `Product`
+
+### Endpoints
+
+- `POST /orders`
+  - WAITER only
+  - creates full order with nested plates/items
+- `GET /orders`
+  - WAITER: only own orders
+  - COOK: all orders from same taqueria
+- `GET /orders/:id`
+  - ownership and role checks enforced
+- `PATCH /orders/:id`
+  - WAITER only
+  - append-only edit (adds new plates/items, no historical mutation)
+- `PATCH /orders/:id/status`
+  - COOK only
+  - updates order status
+
+### Immutable edit rules (append-only)
+
+- Existing plates/items are treated as immutable historical records.
+- Edit flow never mutates old plates/items quantities/products.
+- New items are appended inside newly created plates.
+- Edited orders are marked `isUpdated = true`.
+- Newly appended items are marked `isNew = true`.
+
+### Role and ownership rules
+
+- Multi-taqueria isolation via `taqueriaId` is mandatory in every query.
+- WAITER cannot edit orders created by other waiters.
+- WAITER cannot update order status.
+- COOK can update status and view all orders in same taqueria.
+- Cross-tenant access is blocked.
+
+### Validations
+
+- Product IDs must exist and belong to current taqueria.
+- Quantities must be positive integers.
+- `tableNumber` is required non-empty string (trim applied).
+  - valid examples:
+    - `Mesa 1`
+    - `Mesa Juanita`
+    - `Terraza`
+    - `Barra 3`
+    - `Pedido Uber`
+    - `Mesa VIP`
+- Status updates must use enum values only.
+- Item `notes` is optional string.
+  - valid values:
+    - omitted
+    - `""`
+    - `"Sin salsa"`
+
+### Historical consistency
+
+- Orders are not physically deleted in this stage.
+- Data model is prepared for future analytics/reports/realtime prioritization.
+
+### Prisma updates
+
+- Enum `OrderStatus` evolved to:
+  - `PENDING`
+  - `PREPARING`
+  - `READY`
+  - `DELIVERED`
+  - `CANCELLED`
+- Migration intent created for orders stage:
+  - `orders_core_crud_append_only` (schema aligned in DB)
+
+### Domain correction (Orders)
+
+- `notes` is optional by design and can be empty.
+- `tableNumber` represents mesa/pedido visual label, not numeric table index.

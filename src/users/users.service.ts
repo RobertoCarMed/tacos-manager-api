@@ -12,17 +12,35 @@ export class UsersService {
     });
   }
 
-  findTaqueriaByName(name: string): Promise<Taqueria | null> {
-    return this.prisma.taqueria.findUnique({
+  findTaqueriasByName(name: string): Promise<Taqueria[]> {
+    return this.prisma.taqueria.findMany({
       where: { name },
+      orderBy: { createdAt: 'asc' },
     });
   }
 
-  createTaqueria(data: { name: string; restaurantCode: string }): Promise<Taqueria> {
+  findTaqueriaByRestaurantCode(restaurantCode: string): Promise<Taqueria | null> {
+    return this.prisma.taqueria.findUnique({
+      where: { restaurantCode },
+    });
+  }
+
+  createTaqueria(data: {
+    name: string;
+    restaurantCode: string;
+    phone?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+  }): Promise<Taqueria> {
     return this.prisma.taqueria.create({
       data: {
         name: data.name,
         restaurantCode: data.restaurantCode,
+        phone: data.phone,
+        address: data.address,
+        city: data.city,
+        state: data.state,
       },
     });
   }
@@ -60,10 +78,5 @@ export class UsersService {
         taqueria: true,
       },
     });
-  }
-
-  sanitizeUser<T extends { password?: string }>(user: T): Omit<T, 'password'> {
-    const { password: _password, ...rest } = user;
-    return rest;
   }
 }
