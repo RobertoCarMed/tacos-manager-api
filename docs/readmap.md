@@ -42,14 +42,10 @@ Tecnologías principales:
 - Products Module
 - Orders Core CRUD
 - Kitchen Queue Logic
-
-## En Desarrollo
-
-- Kitchen Queue Logic (validación final)
+- Socket.IO Foundation
 
 ## Pendiente
 
-- Socket.IO Foundation
 - Kitchen Realtime
 - Frontend Migration
 - Realtime Reliability
@@ -363,47 +359,38 @@ Actualizado cuando:
 
 Estado:
 
-⬜ PENDIENTE
+✅ COMPLETADA
 
 ---
 
-## Objetivos
+## Implementado
 
-Agregar infraestructura realtime.
+- `@nestjs/websockets` + `@nestjs/platform-socket.io` + `socket.io` instalados
+- `RealtimeGateway` con `OnGatewayConnection` / `OnGatewayDisconnect`
+- JWT validado en handshake — conexiones inválidas rechazadas
+- Contexto de usuario cargado en `socket.data.user`
+- `RealtimeAuthGuard` para handlers individuales
+- Room multi-tenant: `taqueria:<taqueriaId>`
+- Evento `join-taqueria` implementado
+- `IoAdapter` configurado en `main.ts`
+- Documentación actualizada
 
----
+## Archivos
 
-## Implementar
+```txt
+src/realtime/
+├── interfaces/
+│   └── authenticated-socket.interface.ts
+├── realtime-auth.guard.ts
+├── realtime.gateway.ts
+└── realtime.module.ts
+```
 
-- Socket.IO
-- WebSocket Gateway
-- Rooms por taquería
-- Eventos básicos
-- Conexiones persistentes
+## Rooms
 
----
-
-## Eventos previstos
-
-order-created
-
-order-updated
-
-order-status-changed
-
----
-
-## Entregables
-
-### Orders Gateway
-
-orders.gateway.ts
-
----
-
-### Realtime Rooms
-
-room:<taqueriaId>
+```txt
+taqueria:<taqueriaId>
+```
 
 ---
 

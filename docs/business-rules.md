@@ -597,20 +597,63 @@ Todos los endpoints deben validar:
 
 ---
 
-# 20. Preparación para Realtime
+# 20. Realtime — Reglas de Conexión WebSocket
 
-La arquitectura debe quedar preparada para futuras etapas:
+## Autenticación WebSocket
 
-- Socket.IO
-- Eventos realtime
-- Cocina en tiempo real
-- Actualización instantánea
+El token JWT utilizado en REST es el mismo que se usa en WebSocket.
 
-Eventos futuros previstos:
+El token debe enviarse en el handshake:
 
-- order-created
-- order-updated
-- order-status-changed
+```txt
+socket.handshake.auth.token = "<jwt>"
+```
+
+O bien:
+
+```txt
+Authorization: Bearer <jwt>
+```
+
+JWT inválido o ausente → conexión rechazada.
+
+---
+
+## Rooms Multi-Tenant
+
+Cada taquería tiene su propia room:
+
+```txt
+taqueria:<taqueriaId>
+```
+
+Reglas:
+
+- Todos los usuarios de la misma taquería comparten room.
+- Un usuario nunca puede unirse a la room de otra taquería.
+- El `taqueriaId` de la room proviene exclusivamente del JWT (nunca del cliente).
+
+---
+
+## Aislamiento de Eventos
+
+Los eventos de negocio se emiten únicamente a la room de la taquería correspondiente.
+
+Un cocinero o mesero solo recibe eventos de su propia taquería.
+
+---
+
+## Eventos Disponibles (Etapa 4.3)
+
+- `connection` — validación JWT + join room automático
+- `disconnect` — limpieza de conexión
+- `join-taqueria` — confirmación de room activa
+
+## Eventos Planificados (Etapa 4.4)
+
+- `order-created` — nueva orden creada
+- `order-updated` — orden actualizada (append)
+- `order-status-changed` — cambio de estado por cocinero
 
 ---
 

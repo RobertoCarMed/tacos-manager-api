@@ -8,9 +8,10 @@ Plataforma SaaS multi-tenant para la administración operativa de taquerías. Ba
 - **Prisma 7** — ORM, migraciones y schema
 - **PostgreSQL** — base de datos
 - **JWT (Passport)** — autenticación con Bearer tokens
+- **Socket.IO 4** (`@nestjs/websockets`, `@nestjs/platform-socket.io`) — WebSockets realtime
 - **bcrypt** — hash de contraseñas
 - **class-validator / class-transformer** — validación y transformación de DTOs
-- **pnpm** — gestor de paquetes
+- **pnpm** — gestor de paquetes (invocar con `npx pnpm`)
 - **Docker** — PostgreSQL local (`docker-compose.yml`)
 
 ## Comandos esenciales
@@ -54,7 +55,11 @@ src/
 ├── users/         # UsersService (acceso a datos, sin controller)
 ├── products/      # CRUD catálogo por taquería
 ├── orders/        # Órdenes append-only + cola de cocina
-└── realtime/      # Socket.IO (pendiente, estructura vacía)
+└── realtime/      # Socket.IO Gateway — autenticación JWT + rooms multi-tenant
+    ├── interfaces/authenticated-socket.interface.ts
+    ├── realtime-auth.guard.ts   # guard para @SubscribeMessage handlers
+    ├── realtime.gateway.ts      # OnGatewayConnection + eventos
+    └── realtime.module.ts
 ```
 
 Cada módulo sigue la estructura `module / controller / service / dto/ / interfaces/`.
@@ -128,7 +133,7 @@ Dentro de cada grupo: orden ASC por `priorityTimestamp`.
 | 3     | Módulo Productos                   | ✅     |
 | 4.1   | Órdenes CRUD                       | ✅     |
 | 4.2   | Cola de cocina FIFO                | ✅     |
-| 4.3   | Socket.IO Foundation               | ⬜     |
+| 4.3   | Socket.IO Foundation               | ✅     |
 | 4.4   | Kitchen Realtime                   | ⬜     |
 | 4.5–8 | Realtime avanzado + Performance    | ⬜     |
 | 5     | Analytics & Reportes               | ⬜     |

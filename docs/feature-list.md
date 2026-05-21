@@ -979,6 +979,74 @@ Single-screen flow remains:
 
 ---
 
+# Backend Migration Progress (ETAPA 4.3 - Socket.IO Foundation)
+
+## Implemented: WebSocket Infrastructure with JWT Authentication and Multi-Tenant Rooms
+
+### New backend module
+
+- `src/realtime`
+  - `realtime.module.ts`
+  - `realtime.gateway.ts`
+  - `realtime-auth.guard.ts`
+  - `interfaces/authenticated-socket.interface.ts`
+
+### New dependencies
+
+- `@nestjs/websockets` — NestJS WebSocket decorators and interfaces
+- `@nestjs/platform-socket.io` — Socket.IO adapter for NestJS
+- `socket.io` — WebSocket server
+
+### Architecture
+
+- `RealtimeGateway` implements `OnGatewayConnection` and `OnGatewayDisconnect`.
+- JWT validation happens at connection time inside `handleConnection`.
+- Authenticated user context (`id`, `name`, `email`, `role`, `taqueriaId`, `restaurantCode`) is stored in `socket.data.user`.
+- `RealtimeAuthGuard` protects individual `@SubscribeMessage` handlers by verifying `socket.data.user` exists.
+- `IoAdapter` registered in `main.ts`.
+
+### Token extraction (handshake)
+
+Accepted sources in order:
+
+1. `socket.handshake.auth.token` — recommended for React Native
+2. `socket.handshake.headers.authorization` — Bearer token fallback
+
+### Multi-tenant rooms
+
+- Room format: `taqueria:<taqueriaId>`
+- Users auto-join their taquería room on connection.
+- `taqueriaId` is always derived from the JWT — never from the client.
+- Cross-taquería event isolation guaranteed by room architecture.
+
+### Events implemented
+
+| Event          | Direction       | Description                            |
+|----------------|-----------------|----------------------------------------|
+| `connection`   | client → server | JWT validation + auto room join        |
+| `disconnect`   | client → server | Connection cleanup                     |
+| `join-taqueria`| client → server | Confirms active room for the client    |
+
+### Events planned (Etapa 4.4)
+
+- `order-created`
+- `order-updated`
+- `order-status-changed`
+- `kitchen-sync`
+
+The gateway is designed to emit to rooms without architectural rewrites.
+
+### Completion criteria met
+
+- ✅ Socket.IO connects correctly
+- ✅ JWT validated at handshake — invalid tokens rejected
+- ✅ Users auto-join their taquería room
+- ✅ Cross-taquería isolation guaranteed by room architecture
+- ✅ No business events yet (foundation only)
+- ✅ Documentation updated
+
+---
+
 # Backend Migration Progress (ETAPA 4.2 - Kitchen Queue Logic)
 
 ## Implemented: Backend as the Single Source of Truth for Kitchen Priority

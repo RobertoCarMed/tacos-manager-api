@@ -32,14 +32,15 @@ La arquitectura sigue principios de:
 ```txt
 Client (React Native)
         │
-        ▼
- NestJS API
-        │
- ├── Auth Module
- ├── Users Module
- ├── Products Module
+        ├── HTTP (REST)          ├── WebSocket (Socket.IO)
+        ▼                                ▼
+ NestJS API                    NestJS WebSocket Gateway
+        │                                │
+ ├── Auth Module               ├── RealtimeGateway
+ ├── Users Module              ├── RealtimeAuthGuard
+ ├── Products Module           └── Rooms: taqueria:<taqueriaId>
  ├── Orders Module
- └── Future Socket.IO Module
+ └── Realtime Module
         │
         ▼
  Prisma ORM
@@ -397,25 +398,93 @@ Tenant Isolation
 
 ---
 
-# Future Architecture
+# Realtime Architecture (Etapa 4.3)
 
-Etapa 4.3
+## WebSocket Gateway
 
-Socket.IO Foundation
+Implementado con `@nestjs/websockets` + `socket.io`.
 
-Eventos previstos:
+Clase: `RealtimeGateway` en `src/realtime/realtime.gateway.ts`
 
 ```txt
-order-created
-order-updated
-order-status-changed
+Cliente conecta → handleConnection
+                      │
+              extractToken (handshake.auth.token / Authorization header)
+                      │
+              jwtService.verifyAsync(token)
+                      │
+              usersService.findAuthUserById(payload.sub)
+                      │
+              socket.data.user = { id, name, email, role, taqueriaId, restaurantCode }
+                      │
+              socket.join(`taqueria:${taqueriaId}`)
 ```
+
+## Autenticación WebSocket
+
+El JWT utilizado en WebSocket es el mismo que en la API REST.
+
+Fuentes aceptadas para el token (en orden de prioridad):
+
+```txt
+1. socket.handshake.auth.token        ← recomendado para React Native
+2. socket.handshake.headers.authorization (Bearer <token>)
+```
+
+JWT inválido o ausente → `client.disconnect()` inmediato.
+
+## Rooms Multi-Tenant
+
+Formato de room:
+
+```txt
+taqueria:<taqueriaId>
+```
+
+Ejemplo:
+
+```txt
+taqueria:b3e2c1d4-...
+```
+
+Todos los usuarios de la misma taquería comparten room.
+El aislamiento entre taquerías es garantizado por el JWT — `taqueriaId` viene del token, nunca del cliente.
+
+## RealtimeAuthGuard
+
+Guard para handlers individuales de WebSocket.
+
+```txt
+Verifica que socket.data.user exista (seteado en handleConnection).
+Lanza WsException('Unauthorized') si no existe.
+```
+
+## Eventos Disponibles (Etapa 4.3)
+
+| Evento         | Dirección       | Descripción                                 |
+|----------------|-----------------|---------------------------------------------|
+| `connection`   | cliente → server| Handshake + validación JWT + join room      |
+| `disconnect`   | cliente → server| Limpieza de conexión                        |
+| `join-taqueria`| cliente → server| Confirma la room activa del usuario         |
+
+## Eventos Planificados (Etapa 4.4)
+
+```txt
+order-created         server → room taquería
+order-updated         server → room taquería
+order-status-changed  server → room taquería
+kitchen-sync          server → room taquería
+```
+
+El gateway está diseñado para emitir a rooms sin necesidad de reescribir la arquitectura.
 
 ---
 
+# Future Architecture
+
 Etapa 4.4
 
-Kitchen Realtime
+Kitchen Realtime — emitir eventos de negocio desde OrdersService usando el gateway.
 
 ---
 

@@ -271,16 +271,82 @@ READY
 
 ---
 
-# Future Endpoints
+# WebSocket — Socket.IO
 
-Socket.IO
+Puerto: mismo que la API REST (3000 por defecto).
 
-Eventos previstos:
+Protocolo: Socket.IO v4.
+
+---
+
+## Conexión
+
+El cliente debe enviar el JWT en el handshake:
+
+```js
+// Opción A — recomendada (React Native)
+const socket = io('http://localhost:3000', {
+  auth: { token: '<jwt>' }
+});
+
+// Opción B — header Authorization
+const socket = io('http://localhost:3000', {
+  extraHeaders: { Authorization: 'Bearer <jwt>' }
+});
+```
+
+JWT inválido o ausente → conexión rechazada automáticamente.
+
+---
+
+## Rooms
+
+Al conectarse exitosamente, el usuario es unido automáticamente a:
 
 ```txt
-order-created
-order-updated
-order-status-changed
+taqueria:<taqueriaId>
+```
+
+Usuarios de diferentes taquerías nunca comparten room.
+
+---
+
+## Eventos del cliente → servidor
+
+### `join-taqueria`
+
+Confirma la room activa del usuario autenticado.
+
+```js
+socket.emit('join-taqueria');
+// o con callback
+socket.emit('join-taqueria', (response) => {
+  console.log(response.data.room); // "taqueria:<id>"
+});
+```
+
+Respuesta:
+
+```json
+{
+  "event": "join-taqueria",
+  "data": {
+    "room": "taqueria:<taqueriaId>",
+    "taqueriaId": "<taqueriaId>",
+    "restaurantCode": "TM-4821"
+  }
+}
+```
+
+---
+
+## Eventos del servidor → cliente (planificados Etapa 4.4)
+
+```txt
+order-created         emitido a: taqueria:<taqueriaId>
+order-updated         emitido a: taqueria:<taqueriaId>
+order-status-changed  emitido a: taqueria:<taqueriaId>
+kitchen-sync          emitido a: taqueria:<taqueriaId>
 ```
 
 ---
