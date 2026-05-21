@@ -1,4 +1,4 @@
-# 🌮 TacosManager — Feature List (MVP)
+# 🌮 TacosManager — Feature List
 
 ## 📌 Project Overview
 

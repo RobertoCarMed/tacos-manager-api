@@ -1,0 +1,634 @@
+# TacosManager - Reglas de Negocio
+
+Versión: 1.0
+Estado: Backend NestJS + Prisma + PostgreSQL
+Última actualización: Etapa 4.2 (Kitchen Queue Logic)
+
+---
+
+# 1. Descripción General
+
+TacosManager es una plataforma SaaS multi-taquería diseñada para administrar:
+
+- Catálogo de productos
+- Pedidos
+- Cocina
+- Historial de órdenes
+- Operación diaria de meseros y cocineros
+
+La plataforma permite que múltiples taquerías operen simultáneamente de forma aislada utilizando arquitectura multi-tenant.
+
+---
+
+# 2. Arquitectura Multi-Tenant
+
+## Principio General
+
+Toda la información pertenece a una taquería.
+
+Ningún usuario puede acceder a información de otra taquería.
+
+---
+
+## Entidad Taquería
+
+Cada taquería posee:
+
+- id
+- name
+- restaurantCode
+
+---
+
+## restaurantCode
+
+Es el identificador único real de una taquería.
+
+Ejemplos:
+
+- TQR-4821
+- TM-9182
+- TACO-1832
+
+Reglas:
+
+- Debe ser único
+- Se genera automáticamente
+- No puede modificarse manualmente
+
+---
+
+## Nombre de Taquería
+
+Reglas:
+
+- Pueden existir múltiples taquerías con el mismo nombre
+- El nombre NO es un identificador único
+- El restaurantCode es el identificador oficial
+
+Ejemplo válido:
+
+Taquería El Güero
+- TQR-1111
+
+Taquería El Güero
+- TQR-2222
+
+---
+
+# 3. Usuarios
+
+## Roles
+
+### COOK
+
+Puede:
+
+- Ver todos los pedidos de la taquería
+- Cambiar estados de pedidos
+- Gestionar cocina
+- Ver historial completo
+
+No puede:
+
+- Acceder a otras taquerías
+
+---
+
+### WAITER
+
+Puede:
+
+- Crear pedidos
+- Consultar sus pedidos
+- Editar pedidos propios
+
+No puede:
+
+- Ver pedidos de otros meseros
+- Cambiar estados de cocina
+- Acceder a otras taquerías
+
+---
+
+# 4. Registro Inteligente
+
+## Flujo General
+
+El frontend solicita:
+
+- name
+- email
+- password
+- role
+- taqueriaName
+
+---
+
+## Escenario 1
+
+### No existen coincidencias
+
+Respuesta:
+
+- Permitir crear nueva taquería
+
+---
+
+## Escenario 2
+
+### Existe una coincidencia
+
+Respuesta:
+
+- Permitir unirse
+- Permitir crear una nueva taquería con el mismo nombre
+
+---
+
+## Escenario 3
+
+### Existen múltiples coincidencias
+
+Respuesta:
+
+- Mostrar lista de coincidencias
+- Permitir seleccionar una
+- Permitir crear una nueva
+
+---
+
+# 5. Productos
+
+## Product
+
+Campos principales:
+
+- id
+- name
+- price
+- complements
+- taqueriaId
+
+---
+
+## Reglas
+
+Todos los productos pertenecen a una taquería.
+
+Los usuarios sólo pueden consultar productos de su propia taquería.
+
+---
+
+## Complementos
+
+Máximo:
+
+3 complementos por producto.
+
+---
+
+# 6. Pedidos
+
+---
+
+## Order
+
+Representa una orden completa.
+
+Contiene:
+
+- waiter
+- taquería
+- plates
+- status
+- revision
+- priorityTimestamp
+
+---
+
+## tableNumber
+
+Representa el identificador visual de la orden.
+
+No necesariamente es numérico.
+
+Ejemplos válidos:
+
+- Mesa 1
+- Mesa Juanita
+- Barra 3
+- Terraza
+- Uber Eats
+- Pedido Rappi
+
+Reglas:
+
+- Obligatorio
+- String
+- No vacío
+
+---
+
+# 7. Plates
+
+Representan agrupaciones visuales dentro de una orden.
+
+Ejemplo:
+
+PLATE 1
+- Taco Pastor
+- Taco Asada
+
+PLATE 2
+- Quesadilla
+- Horchata
+
+---
+
+Campos:
+
+- id
+- orderId
+- plateNumber
+- isClosed
+- createdInRevision
+
+---
+
+# 8. Items
+
+Representan productos individuales.
+
+Campos:
+
+- id
+- plateId
+- productId
+- quantity
+- selectedComplements
+- notes
+- isNew
+- createdInRevision
+
+---
+
+## Notes
+
+Las notas son opcionales.
+
+Ejemplos válidos:
+
+```json
+{
+  "notes": ""
+}
+```
+
+```json
+{
+}
+```
+
+```json
+{
+  "notes": "Sin salsa"
+}
+```
+
+---
+
+# 9. Historial
+
+Los pedidos nunca deben eliminarse físicamente.
+
+Objetivos:
+
+- Auditoría
+- Historial
+- Reportes
+- Estadísticas futuras
+
+---
+
+# 10. Regla Crítica de Edición
+
+## Append Only Editing
+
+Los pedidos NO se modifican.
+
+Los pedidos se amplían.
+
+---
+
+## Permitido
+
+Agregar:
+
+- Nuevos plates
+- Nuevos items
+
+---
+
+## Prohibido
+
+Modificar:
+
+- Plates existentes
+- Items existentes
+- Cantidades anteriores
+- Productos anteriores
+
+---
+
+Ejemplo:
+
+Pedido original:
+
+PLATE 1
+- Taco Pastor
+- Taco Asada
+
+Cliente pide más:
+
+PLATE 2
+- Quesadilla
+- Horchata
+
+PLATE 1 permanece intacto.
+
+---
+
+# 11. Revisions
+
+Cada pedido posee:
+
+revision
+
+---
+
+Pedido nuevo:
+
+revision = 1
+
+---
+
+Primera actualización:
+
+revision = 2
+
+---
+
+Segunda actualización:
+
+revision = 3
+
+---
+
+Objetivo:
+
+- Trazabilidad
+- Realtime futuro
+- Auditoría
+
+---
+
+# 12. createdInRevision
+
+Permite identificar cuándo apareció un plate o item.
+
+Ejemplo:
+
+PLATE 1
+
+createdInRevision = 1
+
+---
+
+PLATE 2
+
+createdInRevision = 2
+
+---
+
+# 13. Estados de Pedido
+
+Estados válidos:
+
+- UPDATED
+- PENDING
+- PREPARING
+- READY
+- DELIVERED
+- CANCELLED
+
+---
+
+## PENDING
+
+Pedido recién creado.
+
+---
+
+## UPDATED
+
+Pedido previamente existente que recibió nuevos plates/items.
+
+Tiene máxima prioridad para cocina.
+
+---
+
+## PREPARING
+
+Pedido en preparación.
+
+---
+
+## READY
+
+Pedido terminado.
+
+---
+
+## DELIVERED
+
+Pedido entregado.
+
+---
+
+## CANCELLED
+
+Pedido cancelado.
+
+---
+
+# 14. Prioridad de Cocina
+
+Prioridades globales:
+
+1. UPDATED
+2. PENDING
+3. PREPARING
+4. READY
+5. DELIVERED
+6. CANCELLED
+
+---
+
+# 15. Cola FIFO
+
+Dentro de cada grupo se utiliza FIFO.
+
+First In First Out.
+
+---
+
+Ejemplo:
+
+Pedido A 12:00
+
+Pedido B 12:05
+
+Resultado:
+
+Pedido A
+
+Pedido B
+
+---
+
+# 16. Prioridad de Pedidos Actualizados
+
+Los pedidos actualizados siempre tienen prioridad sobre pedidos pendientes.
+
+Ejemplo:
+
+Pedido A → PENDING
+
+Pedido B → PENDING
+
+Pedido C → UPDATED
+
+Resultado:
+
+Pedido C
+
+Pedido A
+
+Pedido B
+
+---
+
+# 17. priorityTimestamp
+
+Campo utilizado para:
+
+- Reordenamiento
+- Priorización
+- Realtime futuro
+
+Debe actualizarse cuando:
+
+- Se crea una orden
+- Se agregan nuevos plates
+- Se agregan nuevos items
+
+---
+
+# 18. Highlight Verde
+
+Los nuevos productos agregados en actualizaciones deben mostrarse en verde.
+
+---
+
+## Activación
+
+Cuando se agregan nuevos items:
+
+isNew = true
+
+---
+
+## Permanencia
+
+El color verde permanece durante:
+
+- UPDATED
+- PREPARING
+
+---
+
+## Eliminación
+
+El color verde desaparece únicamente cuando:
+
+- READY
+
+---
+
+Al pasar a READY:
+
+isNew = false
+
+---
+
+# 19. Seguridad
+
+Todos los endpoints deben validar:
+
+- JWT
+- Ownership
+- Multi-tenant
+- Roles
+
+---
+
+## Un mesero no puede
+
+- Cambiar estados
+- Ver pedidos ajenos
+- Ver información de otra taquería
+
+---
+
+## Un cocinero no puede
+
+- Acceder a otra taquería
+
+---
+
+# 20. Preparación para Realtime
+
+La arquitectura debe quedar preparada para futuras etapas:
+
+- Socket.IO
+- Eventos realtime
+- Cocina en tiempo real
+- Actualización instantánea
+
+Eventos futuros previstos:
+
+- order-created
+- order-updated
+- order-status-changed
+
+---
+
+# 21. Principios Arquitectónicos
+
+Mantener siempre:
+
+- NestJS modular
+- PrismaService Singleton
+- DTOs tipados
+- ValidationPipe
+- TypeScript estricto
+- Sin any
+- Ownership centralizado
+- Arquitectura multi-tenant
+- Seguridad por roles
+- Source of Truth en Backend
+
+---
+
+# Fin del Documento
