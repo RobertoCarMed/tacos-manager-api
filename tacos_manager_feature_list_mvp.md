@@ -976,3 +976,64 @@ Single-screen flow remains:
 
 - `notes` is optional by design and can be empty.
 - `tableNumber` represents mesa/pedido visual label, not numeric table index.
+
+---
+
+# Backend Migration Progress (ETAPA 4.2 - Kitchen Queue Logic)
+
+## Implemented: Backend as the Single Source of Truth for Kitchen Priority
+
+### Architecture Changes
+- `isUpdated` boolean flag was completely **removed** and replaced by `UPDATED` as a real `OrderStatus` enum value.
+- The backend now assumes full responsibility for determining the display order of the kitchen queue, eliminating frontend priority logic.
+- New fields introduced for precise priority and update tracking:
+  - `Order.revision`: Counter incremented on every update (starts at 1).
+  - `Order.priorityTimestamp`: Timestamp used strictly for kitchen ordering, refreshed on updates.
+  - `Plate.createdInRevision`: Tracks exactly which revision added the plate.
+  - `Item.createdInRevision`: Tracks exactly which revision added the item.
+
+### Kitchen Queue Ordering (GET /orders for COOK)
+The backend now returns orders pre-sorted by operational priority:
+1. `UPDATED` (highest priority)
+2. `PENDING`
+3. `PREPARING`
+4. `READY`
+5. `DELIVERED`
+6. `CANCELLED`
+
+Within each status group, orders are sorted using a **FIFO (First In, First Out)** strategy by `priorityTimestamp ASC`. 
+This guarantees that the order that has been waiting the longest in its current state appears first, representing accurately the real workflow of a kitchen.
+
+**FIFO Examples:**
+- *Caso 1 (PENDING vs PENDING)*: 
+  - Pedido A (12:00) y Pedido B (12:05)
+  - Resultado: Pedido A -> Pedido B
+- *Caso 2 (UPDATED vs PENDING)*: 
+  - Pedido A PENDING (12:00), Pedido B PENDING (12:05), Pedido C UPDATED (12:15)
+  - Resultado: Pedido C (Prioridad UPDATED) -> Pedido A (Más antiguo PENDING) -> Pedido B
+- *Caso 3 (UPDATED vs UPDATED)*: 
+  - Pedido A UPDATED (12:00) y Pedido B UPDATED (12:10)
+  - Resultado: Pedido A -> Pedido B (La actualización más antigua se atiende primero)
+
+Waiters continue to see orders sorted simply by `createdAt DESC`.
+
+### Append-Only Update Flow (PATCH /orders/:id)
+When a waiter appends new plates/items to an order:
+1. The backend increments the order's `revision`.
+2. New plates and items are assigned `createdInRevision = newRevision`.
+3. New items are flagged with `isNew = true` for frontend highlighting.
+4. The order status is changed to `UPDATED`.
+5. The `priorityTimestamp` is refreshed to `now()`, moving the order to the top of the kitchen queue.
+
+### Green Highlight Rules (isNew lifecycle)
+To maintain the visual "green highlight" for newly added items:
+- New items are born with `isNew = true`.
+- Transitioning the order from `UPDATED` to `PREPARING` does **not** clear the `isNew` flags. Items remain highlighted while the cook starts preparing them.
+- Only when the order transitions to `READY` (from either `UPDATED` or `PREPARING`) does the backend use a Prisma transaction to clear `isNew = false` for all items in the order.
+
+### Security and Validation
+- Cooks are explicitly prevented from manually setting the `UPDATED` status via the API (enforced via `UpdateOrderStatusDto` and semantic service validation). The `UPDATED` status is exclusively managed by the backend during append operations.
+
+### Prisma Updates
+- Enum `OrderStatus` now includes `UPDATED`.
+- Migration created: `20260519040000_kitchen_queue_logic_etapa_4_2`

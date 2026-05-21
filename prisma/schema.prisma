@@ -12,6 +12,7 @@ enum UserRole {
 }
 
 enum OrderStatus {
+  UPDATED
   PENDING
   PREPARING
   READY
@@ -64,35 +65,37 @@ model Product {
 }
 
 model Order {
-  id          String      @id @default(uuid())
-  tableNumber String
-  status      OrderStatus @default(PENDING)
-  isUpdated   Boolean     @default(false)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id                String      @id @default(uuid())
+  tableNumber       String
+  status            OrderStatus @default(PENDING)
+  revision          Int         @default(1)
+  priorityTimestamp DateTime    @default(now())
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
 
-  taqueriaId  String
-  taqueria    Taqueria    @relation(fields: [taqueriaId], references: [id])
+  taqueriaId        String
+  taqueria          Taqueria    @relation(fields: [taqueriaId], references: [id])
 
-  waiterId    String
-  waiter      User        @relation("WaiterOrders", fields: [waiterId], references: [id])
+  waiterId          String
+  waiter            User        @relation("WaiterOrders", fields: [waiterId], references: [id])
 
-  plates      Plate[]
+  plates            Plate[]
 
-  @@index([taqueriaId, status])
+  @@index([taqueriaId, status, priorityTimestamp])
   @@index([waiterId])
 }
 
 model Plate {
-  id          String   @id @default(uuid())
-  plateNumber Int
-  isClosed    Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  id                String   @id @default(uuid())
+  plateNumber       Int
+  isClosed          Boolean  @default(false)
+  createdInRevision Int      @default(1)
+  createdAt         DateTime @default(now())
 
-  orderId     String
-  order       Order    @relation(fields: [orderId], references: [id])
+  orderId           String
+  order             Order    @relation(fields: [orderId], references: [id])
 
-  items       Item[]
+  items             Item[]
 
   @@index([orderId, plateNumber])
 }
@@ -103,6 +106,7 @@ model Item {
   selectedComplements String[]
   notes               String?
   isNew               Boolean  @default(false)
+  createdInRevision   Int      @default(1)
   createdAt           DateTime @default(now())
 
   productId           String

@@ -28,11 +28,13 @@ export class OrdersService {
         waiterId: user.id,
         tableNumber: createOrderDto.tableNumber.trim(),
         status: OrderStatus.PENDING,
-        isUpdated: false,
+        revision: 1,
+        priorityTimestamp: new Date(),
         plates: {
           create: createOrderDto.plates.map((plate) => ({
             plateNumber: plate.plateNumber,
             isClosed: false,
+            createdInRevision: 1,
             items: {
               create: plate.items.map((item) => ({
                 productId: item.productId,
@@ -40,6 +42,7 @@ export class OrdersService {
                 selectedComplements: item.selectedComplements ?? [],
                 notes: item.notes ?? null,
                 isNew: false,
+                createdInRevision: 1,
               })),
             },
           })),
@@ -52,13 +55,52 @@ export class OrdersService {
   }
 
   async getOrders(user: AuthenticatedUser) {
-    const where =
-      user.role === UserRole.COOK
-        ? { taqueriaId: user.taqueriaId }
-        : { taqueriaId: user.taqueriaId, waiterId: user.id };
+    if (user.role === UserRole.COOK) {
+      // Cook: Obtener todas las órdenes de la taquería ordenadas por prioridad de cocina
+      const orders = await this.prisma.$queryRaw`
+        SELECT 
+          o.id,
+          o."taqueriaId",
+          o."waiterId",
+          o."tableNumber",
+          o.status::text as status,
+          o.revision,
+          o."priorityTimestamp",
+          o."createdAt",
+          o."updatedAt"
+        FROM "Order" o
+        WHERE o."taqueriaId" = ${user.taqueriaId}
+        ORDER BY
+          CASE o.status::text
+            WHEN 'UPDATED'    THEN 1
+            WHEN 'PENDING'    THEN 2
+            WHEN 'PREPARING'  THEN 3
+            WHEN 'READY'      THEN 4
+            WHEN 'DELIVERED'  THEN 5
+            WHEN 'CANCELLED'  THEN 6
+          END ASC,
+          o."priorityTimestamp" ASC
+      `;
 
+      // Como $queryRaw devuelve un tipo genérico, obtenemos los ids para hacer 
+      // la consulta final con las relaciones e hidratar correctamente el DTO con Prisma
+      const orderIds = (orders as any[]).map((o) => o.id);
+      
+      if (orderIds.length === 0) return [];
+
+      const fullOrders = await this.prisma.order.findMany({
+        where: { id: { in: orderIds } },
+        select: this.orderSelect(),
+      });
+
+      // Ordenar localmente fullOrders basado en la secuencia original (orderIds)
+      const orderMap = new Map(fullOrders.map(o => [o.id, o]));
+      return orderIds.map(id => orderMap.get(id)).filter(Boolean);
+    }
+
+    // Waiter: Solo sus órdenes, ordenadas por fecha de creación (clásico)
     return this.prisma.order.findMany({
-      where,
+      where: { taqueriaId: user.taqueriaId, waiterId: user.id },
       orderBy: { createdAt: 'desc' },
       select: this.orderSelect(),
     });
@@ -92,6 +134,7 @@ export class OrdersService {
         id: true,
         taqueriaId: true,
         waiterId: true,
+        revision: true,
         plates: {
           select: {
             plateNumber: true,
@@ -121,15 +164,20 @@ export class OrdersService {
 
     await this.validateProductsOwnership(user.taqueriaId, updateOrderDto.plates);
 
+    const newRevision = existingOrder.revision + 1;
+
     // Append-only editing: existing plates/items remain immutable.
     await this.prisma.order.update({
       where: { id },
       data: {
-        isUpdated: true,
+        status: OrderStatus.UPDATED,
+        revision: newRevision,
+        priorityTimestamp: new Date(),
         plates: {
           create: updateOrderDto.plates.map((plate) => ({
             plateNumber: plate.plateNumber,
             isClosed: false,
+            createdInRevision: newRevision,
             items: {
               create: plate.items.map((item) => ({
                 productId: item.productId,
@@ -137,6 +185,7 @@ export class OrdersService {
                 selectedComplements: item.selectedComplements ?? [],
                 notes: item.notes ?? null,
                 isNew: true,
+                createdInRevision: newRevision,
               })),
             },
           })),
@@ -157,6 +206,7 @@ export class OrdersService {
       select: {
         id: true,
         taqueriaId: true,
+        status: true,
       },
     });
 
@@ -164,13 +214,36 @@ export class OrdersService {
       throw new NotFoundException('Order not found');
     }
 
-    const updated = await this.prisma.order.update({
-      where: { id },
-      data: { status: dto.status },
-      select: this.orderSelect(),
-    });
+    if (dto.status === OrderStatus.UPDATED) {
+      throw new BadRequestException('Cannot set UPDATED status manually');
+    }
 
-    return updated;
+    return this.prisma.$transaction(async (tx) => {
+      // Limpiar isNew si transiciona a READY desde UPDATED o PREPARING
+      if (
+        dto.status === OrderStatus.READY &&
+        (existingOrder.status === OrderStatus.UPDATED || existingOrder.status === OrderStatus.PREPARING)
+      ) {
+        const plates = await tx.plate.findMany({
+          where: { orderId: id },
+          select: { id: true },
+        });
+        const plateIds = plates.map(p => p.id);
+        
+        if (plateIds.length > 0) {
+          await tx.item.updateMany({
+            where: { plateId: { in: plateIds }, isNew: true },
+            data: { isNew: false },
+          });
+        }
+      }
+
+      return tx.order.update({
+        where: { id },
+        data: { status: dto.status },
+        select: this.orderSelect(),
+      });
+    });
   }
 
   private async validateProductsOwnership(
@@ -198,7 +271,8 @@ export class OrdersService {
       waiterId: true,
       tableNumber: true,
       status: true,
-      isUpdated: true,
+      revision: true,
+      priorityTimestamp: true,
       createdAt: true,
       updatedAt: true,
       plates: {
@@ -207,6 +281,7 @@ export class OrdersService {
           id: true,
           plateNumber: true,
           isClosed: true,
+          createdInRevision: true,
           createdAt: true,
           items: {
             select: {
@@ -216,6 +291,7 @@ export class OrdersService {
               selectedComplements: true,
               notes: true,
               isNew: true,
+              createdInRevision: true,
               createdAt: true,
             },
           },
