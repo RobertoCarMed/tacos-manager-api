@@ -7,5 +7,6 @@ import { RealtimeGateway } from './realtime.gateway';
 @Module({
   imports: [AuthModule, UsersModule],
   providers: [RealtimeGateway, RealtimeAuthGuard],
+  exports: [RealtimeGateway],
 })
 export class RealtimeModule {}

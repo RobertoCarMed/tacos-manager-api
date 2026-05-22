@@ -1067,15 +1067,6 @@ Accepted sources in order:
 | `disconnect`   | client → server | Connection cleanup                     |
 | `join-taqueria`| client → server | Confirms active room for the client    |
 
-### Events planned (Etapa 4.4)
-
-- `order-created`
-- `order-updated`
-- `order-status-changed`
-- `kitchen-sync`
-
-The gateway is designed to emit to rooms without architectural rewrites.
-
 ### Completion criteria met
 
 - ✅ Socket.IO connects correctly
@@ -1083,6 +1074,68 @@ The gateway is designed to emit to rooms without architectural rewrites.
 - ✅ Users auto-join their taquería room
 - ✅ Cross-taquería isolation guaranteed by room architecture
 - ✅ No business events yet (foundation only)
+- ✅ Documentation updated
+
+---
+
+# Backend Migration Progress (ETAPA 4.4 - Kitchen Realtime)
+
+## Implemented: Order Event Synchronization via WebSocket
+
+### New files
+
+- `src/realtime/interfaces/order-payload.interface.ts` — strongly-typed payload interface
+
+### Modified files
+
+- `src/realtime/realtime.gateway.ts` — added `emitOrderCreated`, `emitOrderUpdated`, `emitOrderStatusChanged`
+- `src/realtime/realtime.module.ts` — exports `RealtimeGateway`
+- `src/orders/orders.module.ts` — imports `RealtimeModule`
+- `src/orders/orders.service.ts` — injects `RealtimeGateway`, emits after each DB operation
+
+### Architecture
+
+- `OrdersService` injects `RealtimeGateway` — no circular dependency since `RealtimeModule` does not import `OrdersModule`.
+- Emission always happens **after** DB persistence is confirmed.
+- All emit methods are wrapped in try-catch: WebSocket failures never roll back DB transactions.
+- All events emitted exclusively to `taqueria:<taqueriaId>` — strict multi-tenant isolation.
+
+### Events implemented
+
+| Event                 | Trigger                        | Role required |
+|-----------------------|--------------------------------|---------------|
+| `order-created`       | POST /orders                   | WAITER        |
+| `order-updated`       | PATCH /orders/:id              | WAITER        |
+| `order-status-changed`| PATCH /orders/:id/status       | COOK          |
+
+### Payload
+
+Every event emits the **complete order** including all plates and items — no partial payloads.
+
+Fields always present: `id`, `taqueriaId`, `waiterId`, `tableNumber`, `status`, `revision`, `priorityTimestamp`, `createdAt`, `updatedAt`, `plates[].items[].isNew`, `plates[].items[].createdInRevision`.
+
+### isNew lifecycle via WebSocket
+
+- `order-created` → all items have `isNew: false`
+- `order-updated` → new items have `isNew: true` (green highlight for kitchen)
+- `order-status-changed` to `READY` → all items have `isNew: false` (cleared in same DB transaction before emit)
+
+### Recipient rules
+
+All connected users in the taquería room receive all events.
+The backend does **not** filter by role — the frontend decides how to handle each event.
+
+### Completion criteria met
+
+- ✅ `order-created` emitted after POST /orders
+- ✅ `order-updated` emitted after PATCH /orders/:id
+- ✅ `order-status-changed` emitted after PATCH /orders/:id/status
+- ✅ Payloads contain complete order with plates, items, isNew, revision
+- ✅ Events emitted only to the correct taquería room
+- ✅ DB persisted before emission (source of truth rule enforced)
+- ✅ WebSocket failures do not affect REST responses or DB state
+- ✅ No circular module dependencies
+- ✅ No `any` types — full TypeScript strict typing
 - ✅ Documentation updated
 
 ---

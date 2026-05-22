@@ -340,13 +340,109 @@ Respuesta:
 
 ---
 
-## Eventos del servidor → cliente (planificados Etapa 4.4)
+## Eventos del servidor → cliente
 
-```txt
-order-created         emitido a: taqueria:<taqueriaId>
-order-updated         emitido a: taqueria:<taqueriaId>
-order-status-changed  emitido a: taqueria:<taqueriaId>
-kitchen-sync          emitido a: taqueria:<taqueriaId>
+### `order-created`
+
+Emitido a `taqueria:<taqueriaId>` cuando un WAITER crea un pedido nuevo (POST /orders).
+
+```js
+socket.on('order-created', ({ order }) => {
+  // order contiene la orden completa
+});
+```
+
+Payload:
+
+```json
+{
+  "order": {
+    "id": "uuid",
+    "taqueriaId": "uuid",
+    "waiterId": "uuid",
+    "tableNumber": "Mesa 3",
+    "status": "PENDING",
+    "revision": 1,
+    "priorityTimestamp": "2024-01-01T12:00:00.000Z",
+    "createdAt": "2024-01-01T12:00:00.000Z",
+    "updatedAt": "2024-01-01T12:00:00.000Z",
+    "plates": [
+      {
+        "id": "uuid",
+        "plateNumber": 1,
+        "isClosed": false,
+        "createdInRevision": 1,
+        "createdAt": "2024-01-01T12:00:00.000Z",
+        "items": [
+          {
+            "id": "uuid",
+            "productId": "uuid",
+            "quantity": 2,
+            "selectedComplements": ["Salsa verde"],
+            "notes": null,
+            "isNew": false,
+            "createdInRevision": 1,
+            "createdAt": "2024-01-01T12:00:00.000Z"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+---
+
+### `order-updated`
+
+Emitido a `taqueria:<taqueriaId>` cuando un WAITER agrega plates/items (PATCH /orders/:id).
+
+El status cambia automáticamente a `UPDATED`. La revisión se incrementa.
+Los nuevos items tienen `isNew: true` para highlight verde en cocina.
+
+```js
+socket.on('order-updated', ({ order }) => {
+  // order contiene la orden completa con todos los plates (históricos + nuevos)
+});
+```
+
+Payload: misma estructura que `order-created`. Campos clave:
+
+```json
+{
+  "order": {
+    "status": "UPDATED",
+    "revision": 2,
+    "plates": [
+      { "createdInRevision": 1, "items": [{ "isNew": false }] },
+      { "createdInRevision": 2, "items": [{ "isNew": true }] }
+    ]
+  }
+}
+```
+
+---
+
+### `order-status-changed`
+
+Emitido a `taqueria:<taqueriaId>` cuando un COOK cambia el estado (PATCH /orders/:id/status).
+
+Al transicionar a `READY`, todos los items con `isNew: true` se limpian automáticamente.
+
+```js
+socket.on('order-status-changed', ({ order }) => {
+  // order contiene la orden con el nuevo status y isNew actualizado
+});
+```
+
+Payload: misma estructura que `order-created`. Campo clave:
+
+```json
+{
+  "order": {
+    "status": "PREPARING"
+  }
+}
 ```
 
 ---

@@ -485,32 +485,101 @@ Verifica que socket.data.user exista (seteado en handleConnection).
 Lanza WsException('Unauthorized') si no existe.
 ```
 
-## Eventos Disponibles (Etapa 4.3)
+## Eventos Disponibles
 
-| Evento         | Dirección       | Descripción                                 |
-|----------------|-----------------|---------------------------------------------|
-| `connection`   | cliente → server| Handshake + validación JWT + join room      |
-| `disconnect`   | cliente → server| Limpieza de conexión                        |
-| `join-taqueria`| cliente → server| Confirma la room activa del usuario         |
+| Evento                | Dirección        | Descripción                                         |
+|-----------------------|------------------|-----------------------------------------------------|
+| `connection`          | cliente → server | Handshake + validación JWT + join room              |
+| `disconnect`          | cliente → server | Limpieza de conexión                                |
+| `join-taqueria`       | cliente → server | Confirma la room activa del usuario                 |
+| `order-created`       | server → room    | Orden nueva creada (POST /orders)                   |
+| `order-updated`       | server → room    | Orden actualizada con Append Only (PATCH /orders/:id) |
+| `order-status-changed`| server → room    | Estado de orden cambiado (PATCH /orders/:id/status) |
 
-## Eventos Planificados (Etapa 4.4)
+---
+
+# Realtime Architecture (Etapa 4.4)
+
+## Flujo de Emisión de Eventos
 
 ```txt
-order-created         server → room taquería
-order-updated         server → room taquería
-order-status-changed  server → room taquería
-kitchen-sync          server → room taquería
+REST Request (WAITER / COOK)
+ ↓
+OrdersController
+ ↓
+OrdersService
+ ↓
+prisma.order.create / update      ← DB es la fuente de verdad
+ ↓
+Confirm DB persistence
+ ↓
+realtimeGateway.emit*(taqueriaId, order)
+ ↓
+server.to(`taqueria:${taqueriaId}`).emit(event, { order })
+ ↓
+Todos los clientes conectados en la room reciben el evento
 ```
 
-El gateway está diseñado para emitir a rooms sin necesidad de reescribir la arquitectura.
+**Regla invariante:** nunca emitir antes de confirmar persistencia en PostgreSQL.
+
+## Integración OrdersModule → RealtimeModule
+
+```txt
+OrdersModule
+ ├── imports: [RealtimeModule]
+ └── OrdersService
+       └── RealtimeGateway (inyectado)
+
+RealtimeModule
+ ├── imports: [AuthModule, UsersModule]
+ ├── providers: [RealtimeGateway, RealtimeAuthGuard]
+ └── exports: [RealtimeGateway]
+```
+
+No existe dependencia circular: `RealtimeModule` no importa `OrdersModule`.
+
+## Payload de Eventos
+
+Todos los eventos emiten la orden completa — el frontend no necesita hacer llamadas REST adicionales.
+
+```txt
+{
+  order: {
+    id, taqueriaId, waiterId, tableNumber,
+    status, revision, priorityTimestamp,
+    createdAt, updatedAt,
+    plates: [
+      {
+        id, plateNumber, isClosed, createdInRevision, createdAt,
+        items: [
+          {
+            id, productId, quantity,
+            selectedComplements, notes,
+            isNew, createdInRevision, createdAt
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+## Manejo de Errores en Emisión
+
+Si Socket.IO falla al emitir:
+
+- La transacción de DB **NO** se revierte.
+- El error se registra via `Logger.error`.
+- La respuesta REST al cliente es exitosa.
+- La persistencia en BD tiene prioridad absoluta.
 
 ---
 
 # Future Architecture
 
-Etapa 4.4
+Etapa 4.5
 
-Kitchen Realtime — emitir eventos de negocio desde OrdersService usando el gateway.
+React Native Socket Migration — conectar frontend a Socket.IO.
 
 ---
 

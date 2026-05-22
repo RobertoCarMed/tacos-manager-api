@@ -643,21 +643,93 @@ Un cocinero o mesero solo recibe eventos de su propia taquería.
 
 ---
 
-## Eventos Disponibles (Etapa 4.3)
+## Eventos Disponibles
 
 - `connection` — validación JWT + join room automático
 - `disconnect` — limpieza de conexión
 - `join-taqueria` — confirmación de room activa
-
-## Eventos Planificados (Etapa 4.4)
-
-- `order-created` — nueva orden creada
-- `order-updated` — orden actualizada (append)
-- `order-status-changed` — cambio de estado por cocinero
+- `order-created` — orden nueva creada (emitido tras POST /orders)
+- `order-updated` — orden actualizada con Append Only (emitido tras PATCH /orders/:id)
+- `order-status-changed` — estado de orden cambiado (emitido tras PATCH /orders/:id/status)
 
 ---
 
-# 21. Principios Arquitectónicos
+# 21. Reglas de Sincronización Realtime
+
+## Persistencia antes de Emisión
+
+El orden es invariante:
+
+```txt
+1. Guardar en PostgreSQL
+2. Confirmar persistencia
+3. Emitir evento WebSocket
+```
+
+Nunca emitir antes de confirmar que la BD tiene el dato.
+
+## Propagación de Cambios
+
+Cuando un WAITER crea un pedido:
+
+- El pedido se persiste en BD.
+- `order-created` se emite a toda la room de la taquería.
+- Cocina y meseros conectados reciben el evento inmediatamente.
+
+Cuando un WAITER actualiza un pedido (Append Only):
+
+- Los nuevos plates/items se persisten en BD.
+- El status cambia a `UPDATED` automáticamente.
+- La revisión se incrementa.
+- Los nuevos items tienen `isNew: true`.
+- `order-updated` se emite a toda la room de la taquería.
+
+Cuando un COOK cambia el estado:
+
+- El nuevo status se persiste en BD.
+- Si el nuevo status es `READY`, todos los `isNew: true` se limpian en la misma transacción antes de emitir.
+- `order-status-changed` se emite a toda la room de la taquería.
+
+## Sincronización Cocina
+
+El COOK recibe en tiempo real:
+
+- Nuevas órdenes creadas por cualquier mesero de la taquería.
+- Órdenes actualizadas (items nuevos en highlight verde via `isNew`).
+- Confirmación de sus propios cambios de estado.
+
+## Sincronización Meseros
+
+El WAITER recibe en tiempo real:
+
+- Cambios de estado de sus propias órdenes (el COOK las actualiza).
+- Actualizaciones de otros meseros de la misma taquería.
+
+## Receptor de Eventos
+
+Todos los usuarios conectados a la room de la taquería reciben todos los eventos.
+
+El backend **no filtra por rol** — el frontend decide qué hacer con cada evento.
+
+## Payload Completo
+
+Todos los eventos emiten la orden completa con plates e items.
+
+El frontend puede actualizar su estado local sin realizar llamadas REST adicionales.
+
+## Fallo de Emisión
+
+Si Socket.IO falla al emitir un evento:
+
+- La transacción de BD **no se revierte**.
+- La respuesta REST al cliente es exitosa.
+- El error se registra en Logger.
+
+La persistencia en BD tiene prioridad absoluta sobre la emisión WebSocket.
+
+---
+
+# 22. Principios Arquitectónicos
 
 Mantener siempre:
 

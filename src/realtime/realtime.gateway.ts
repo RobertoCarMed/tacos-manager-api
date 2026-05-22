@@ -10,9 +10,8 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { Server, Socket } from 'socket.io';
 import { UsersService } from '../users/users.service';
-import type {
-  AuthenticatedSocket,
-} from './interfaces/authenticated-socket.interface';
+import type { AuthenticatedSocket } from './interfaces/authenticated-socket.interface';
+import type { OrderRealtimePayload } from './interfaces/order-payload.interface';
 import { RealtimeAuthGuard } from './realtime-auth.guard';
 
 @WebSocketGateway({
@@ -89,6 +88,45 @@ export class RealtimeGateway
       event: 'join-taqueria',
       data: { room, taqueriaId, restaurantCode },
     };
+  }
+
+  emitOrderCreated(taqueriaId: string, order: OrderRealtimePayload): void {
+    if (!this.server) {
+      this.logger.warn('WebSocket server not ready — skipping order-created emission');
+      return;
+    }
+    try {
+      this.server.to(`taqueria:${taqueriaId}`).emit('order-created', { order });
+      this.logger.log(`order-created → taqueria:${taqueriaId} order=${order.id}`);
+    } catch (error) {
+      this.logger.error(`Failed to emit order-created order=${order.id}`, error);
+    }
+  }
+
+  emitOrderUpdated(taqueriaId: string, order: OrderRealtimePayload): void {
+    if (!this.server) {
+      this.logger.warn('WebSocket server not ready — skipping order-updated emission');
+      return;
+    }
+    try {
+      this.server.to(`taqueria:${taqueriaId}`).emit('order-updated', { order });
+      this.logger.log(`order-updated → taqueria:${taqueriaId} order=${order.id} rev=${order.revision}`);
+    } catch (error) {
+      this.logger.error(`Failed to emit order-updated order=${order.id}`, error);
+    }
+  }
+
+  emitOrderStatusChanged(taqueriaId: string, order: OrderRealtimePayload): void {
+    if (!this.server) {
+      this.logger.warn('WebSocket server not ready — skipping order-status-changed emission');
+      return;
+    }
+    try {
+      this.server.to(`taqueria:${taqueriaId}`).emit('order-status-changed', { order });
+      this.logger.log(`order-status-changed → taqueria:${taqueriaId} order=${order.id} status=${order.status}`);
+    } catch (error) {
+      this.logger.error(`Failed to emit order-status-changed order=${order.id}`, error);
+    }
   }
 
   private extractToken(client: Socket): string | null {

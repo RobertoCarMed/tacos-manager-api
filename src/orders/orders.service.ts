@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { OrderStatus, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
@@ -13,7 +14,10 @@ import { AuthenticatedUser } from './interfaces/authenticated-user.interface';
 
 @Injectable()
 export class OrdersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly realtimeGateway: RealtimeGateway,
+  ) {}
 
   async createOrder(user: AuthenticatedUser, createOrderDto: CreateOrderDto) {
     if (user.role !== UserRole.WAITER) {
@@ -51,6 +55,7 @@ export class OrdersService {
       select: this.orderSelect(),
     });
 
+    this.realtimeGateway.emitOrderCreated(order.taqueriaId, order);
     return order;
   }
 
@@ -193,7 +198,9 @@ export class OrdersService {
       },
     });
 
-    return this.getOrderById(user, id);
+    const updatedOrder = await this.getOrderById(user, id);
+    this.realtimeGateway.emitOrderUpdated(updatedOrder.taqueriaId, updatedOrder);
+    return updatedOrder;
   }
 
   async updateOrderStatus(user: AuthenticatedUser, id: string, dto: UpdateOrderStatusDto) {
@@ -218,7 +225,7 @@ export class OrdersService {
       throw new BadRequestException('Cannot set UPDATED status manually');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const updatedOrder = await this.prisma.$transaction(async (tx) => {
       // Limpiar isNew si transiciona a READY desde UPDATED o PREPARING
       if (
         dto.status === OrderStatus.READY &&
@@ -229,7 +236,7 @@ export class OrdersService {
           select: { id: true },
         });
         const plateIds = plates.map(p => p.id);
-        
+
         if (plateIds.length > 0) {
           await tx.item.updateMany({
             where: { plateId: { in: plateIds }, isNew: true },
@@ -244,6 +251,9 @@ export class OrdersService {
         select: this.orderSelect(),
       });
     });
+
+    this.realtimeGateway.emitOrderStatusChanged(updatedOrder.taqueriaId, updatedOrder);
+    return updatedOrder;
   }
 
   private async validateProductsOwnership(

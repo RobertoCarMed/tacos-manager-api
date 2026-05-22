@@ -43,10 +43,10 @@ Tecnologías principales:
 - Orders Core CRUD
 - Kitchen Queue Logic
 - Socket.IO Foundation
+- Kitchen Realtime
 
 ## Pendiente
 
-- Kitchen Realtime
 - Frontend Migration
 - Realtime Reliability
 - Analytics
@@ -399,7 +399,7 @@ taqueria:<taqueriaId>
 
 Estado:
 
-⬜ PENDIENTE
+✅ COMPLETADA
 
 ---
 
@@ -409,43 +409,40 @@ Reemplazar Firebase realtime.
 
 ---
 
-## Funcionalidades
+## Implementado
 
-Crear pedido:
+### Nuevos archivos
 
-Actualización instantánea cocina.
+- `src/realtime/interfaces/order-payload.interface.ts`
 
----
+### Archivos modificados
 
-Editar pedido:
+- `src/realtime/realtime.gateway.ts` — métodos `emitOrderCreated`, `emitOrderUpdated`, `emitOrderStatusChanged`
+- `src/realtime/realtime.module.ts` — exporta `RealtimeGateway`
+- `src/orders/orders.module.ts` — importa `RealtimeModule`
+- `src/orders/orders.service.ts` — emite tras cada operación de BD
 
-Actualización instantánea cocina.
+### Eventos implementados
 
----
+order-created → emitido tras POST /orders
 
-Cambiar estado:
+order-updated → emitido tras PATCH /orders/:id
 
-Actualización instantánea meseros.
+order-status-changed → emitido tras PATCH /orders/:id/status
 
----
+### Regla de persistencia
 
-## Eventos
+BD primero → confirmar → emitir WebSocket.
 
-order-created
-
-order-updated
-
-order-status-changed
-
----
-
-## Resultado esperado
+### Resultado
 
 Sin polling.
 
 Sin refresh manual.
 
 Sin Firebase.
+
+Actualización instantánea cocina y meseros.
 
 ---
 
@@ -671,9 +668,9 @@ Una etapa se considera completada cuando:
 
 # Próxima Etapa
 
-ETAPA 4.3
+ETAPA 4.5
 
-Socket.IO Foundation
+React Native Socket Migration
 
 Objetivo:
 
