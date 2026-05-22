@@ -979,6 +979,46 @@ Single-screen flow remains:
 
 ---
 
+# Refactor Arquitectónico — JWT Centralizado (post-Etapa 4.3)
+
+## Implemented: AuthModule como única fuente de verdad para JWT
+
+### Problema resuelto
+
+Existían dos registros independientes de `JwtModule`:
+
+- `AuthModule` → `JwtModule.registerAsync(...)`
+- `RealtimeModule` → `JwtModule.registerAsync(...)` (duplicado)
+
+Aunque ambos usaban el mismo `JWT_SECRET`, cualquier cambio futuro en la configuración JWT (expiresIn, issuer, audience, algorithm) podría desincronizar REST y Socket.IO.
+
+### Cambios realizados
+
+- `AuthModule` ahora exporta `[AuthService, JwtModule]`.
+- `RealtimeModule` elimina su propio `JwtModule.registerAsync(...)`.
+- `RealtimeModule` importa `AuthModule` para reutilizar el `JwtService` ya configurado.
+
+### Resultado
+
+```txt
+AuthModule
+ ├── JwtModule (única configuración: JWT_SECRET + expiresIn: 1d)
+ └── exports: [AuthService, JwtModule]
+
+RealtimeModule
+ ├── imports: [AuthModule, UsersModule]
+ └── JwtService provisto por AuthModule — sin duplicación
+```
+
+### Comportamiento sin cambios
+
+- REST sigue autenticando igual.
+- Socket.IO sigue validando el mismo JWT con la misma configuración.
+- Rooms multi-tenant sin cambios.
+- Sin cambios en lógica de negocio, ownership, roles ni órdenes.
+
+---
+
 # Backend Migration Progress (ETAPA 4.3 - Socket.IO Foundation)
 
 ## Implemented: WebSocket Infrastructure with JWT Authentication and Multi-Tenant Rooms

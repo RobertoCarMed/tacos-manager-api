@@ -117,12 +117,12 @@ Permisos:
 
 JWT Authentication.
 
-Flujo:
+Flujo REST:
 
 ```txt
 Login
  ↓
-JWT
+JWT (generado por AuthModule → JwtService)
  ↓
 Auth Guard
  ↓
@@ -130,6 +130,32 @@ Request User Context
  ↓
 Ownership Validation
 ```
+
+Flujo WebSocket:
+
+```txt
+socket.handshake.auth.token
+ ↓
+JwtService.verifyAsync (mismo servicio que REST — provisto por AuthModule)
+ ↓
+User context → socket.data.user
+ ↓
+Auto-join taqueria:<taqueriaId>
+```
+
+## Fuente de verdad JWT
+
+`AuthModule` es la única fuente de verdad para la configuración JWT del sistema.
+
+```txt
+AuthModule
+ ├── JwtModule.registerAsync(JWT_SECRET, expiresIn: 1d)
+ ├── exports: [AuthService, JwtModule]
+ └── Todos los módulos que necesiten JwtService importan AuthModule
+```
+
+`RealtimeModule` importa `AuthModule` — no registra su propio `JwtModule`.
+Cualquier cambio futuro en `secret`, `expiresIn`, `issuer` o `algorithm` se aplica automáticamente a REST y Socket.IO.
 
 JWT contiene:
 

@@ -64,6 +64,10 @@ src/
 
 Cada módulo sigue la estructura `module / controller / service / dto/ / interfaces/`.
 
+## Fuente de verdad JWT
+
+`AuthModule` es la única fuente de verdad para la configuración JWT. Exporta `[AuthService, JwtModule]`. Cualquier módulo que necesite `JwtService` debe importar `AuthModule`, no registrar su propio `JwtModule`.
+
 ## Multi-tenancy
 
 Cada taquería tiene un `restaurantCode` único (ej. `TM-4821`). El JWT contiene `{ userId, role, taqueriaId, restaurantCode }`. **El backend nunca acepta `taqueriaId` del cliente** — siempre se toma del token. Todas las queries filtran por `taqueriaId`.
