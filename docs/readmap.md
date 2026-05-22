@@ -27,7 +27,7 @@ Tecnologías principales:
 - PostgreSQL
 - Docker
 - JWT
-- Socket.IO (futuro)
+- Socket.IO
 - React Native
 
 ---
