@@ -2,7 +2,7 @@ import { io } from 'socket.io-client';
 
 const socket = io('http://localhost:3000', {
   auth: {
-    token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0ZjNmNWMwZC02ZmY3LTQxZGUtYjk0Zi02NmJlMmVkNjQwYWEiLCJlbWFpbCI6ImFubmV0ZUB0ZXN0LmNvbSIsInJvbGUiOiJXQUlURVIiLCJ0YXF1ZXJpYUlkIjoiZGU1ZDFmZGItZDZhYi00ZmQ2LWJhYTItY2YyYjljM2I0NjM3IiwiaWF0IjoxNzc5NDIxMDg3LCJleHAiOjE3Nzk1MDc0ODd9.p7gpHlIpqw4gTRMC711aMjHHjJoQ-FvzlFvtjCwN2UA'
+    token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4ZGI3NDc5Ni1hYTlhLTRhMzQtODA4MC03NzQ5ZTczNDEyYzQiLCJlbWFpbCI6InJvYmVydG8xQHRlc3QuY29tIiwicm9sZSI6IkNPT0siLCJ0YXF1ZXJpYUlkIjoiZGYwYzBhYTItMjBkYS00ZGQxLWIzMjktN2M3MWJhYjYxMjI2IiwiaWF0IjoxNzc5NDIxMzE2LCJleHAiOjE3Nzk1MDc3MTZ9.pZAqG11Jd2ROy9bjqfk4sqfcGDlUfeyddId17gRqKPI'
     },
 });
 
@@ -27,5 +27,5 @@ socket.on('connect_error', error => {
 
 
 /**
- * WAITER TOKEN A
-*/
+COOK TOKEN B
+ */

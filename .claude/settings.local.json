@@ -4,7 +4,12 @@
       "Bash(git add *)",
       "Bash(git commit *)",
       "Bash(pnpm add *)",
-      "Bash(npx pnpm *)"
+      "Bash(npx pnpm *)",
+      "Bash(Get-ChildItem -Path \"D:\\\\TacosManager\\\\Backend\\\\tacos-manager-api\" -Recurse -Include \"*.ts\", \"*.prisma\", \"*.md\")",
+      "Bash(Select-Object -First 50)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(Get-ChildItem -Recurse src -Include \"*.controller.ts\",\"*.dto.ts\",\"*.guard.ts\",\"*.decorator.ts\")",
+      "Bash(Select-Object -ExpandProperty FullName)"
     ]
   }
 }
