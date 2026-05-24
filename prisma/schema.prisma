@@ -20,6 +20,12 @@ enum OrderStatus {
   CANCELLED
 }
 
+enum OrderType {
+  DINE_IN
+  TAKEAWAY
+  DELIVERY
+}
+
 model Taqueria {
   id             String    @id @default(uuid())
   name           String
@@ -66,7 +72,9 @@ model Product {
 
 model Order {
   id                String      @id @default(uuid())
-  tableNumber       String
+  type              OrderType   @default(DINE_IN)
+  reference         String?
+  deliveryAddress   String?
   status            OrderStatus @default(PENDING)
   revision          Int         @default(1)
   priorityTimestamp DateTime    @default(now())

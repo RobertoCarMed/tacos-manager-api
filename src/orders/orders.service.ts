@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { OrderStatus, UserRole } from '@prisma/client';
+import { OrderStatus, OrderType, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -24,13 +24,21 @@ export class OrdersService {
       throw new ForbiddenException('Only WAITER can create orders');
     }
 
+    this.validateClassification(
+      createOrderDto.type,
+      createOrderDto.reference,
+      createOrderDto.deliveryAddress,
+    );
+
     await this.validateProductsOwnership(user.taqueriaId, createOrderDto.plates);
 
     const order = await this.prisma.order.create({
       data: {
         taqueriaId: user.taqueriaId,
         waiterId: user.id,
-        tableNumber: createOrderDto.tableNumber.trim(),
+        type: createOrderDto.type,
+        reference: createOrderDto.reference ?? null,
+        deliveryAddress: createOrderDto.deliveryAddress ?? null,
         status: OrderStatus.PENDING,
         revision: 1,
         priorityTimestamp: new Date(),
@@ -61,13 +69,13 @@ export class OrdersService {
 
   async getOrders(user: AuthenticatedUser) {
     if (user.role === UserRole.COOK) {
-      // Cook: Obtener todas las órdenes de la taquería ordenadas por prioridad de cocina
       const orders = await this.prisma.$queryRaw`
-        SELECT 
+        SELECT
           o.id,
           o."taqueriaId",
           o."waiterId",
-          o."tableNumber",
+          o."reference",
+          o."type",
           o.status::text as status,
           o.revision,
           o."priorityTimestamp",
@@ -87,10 +95,8 @@ export class OrdersService {
           o."priorityTimestamp" ASC
       `;
 
-      // Como $queryRaw devuelve un tipo genérico, obtenemos los ids para hacer 
-      // la consulta final con las relaciones e hidratar correctamente el DTO con Prisma
       const orderIds = (orders as any[]).map((o) => o.id);
-      
+
       if (orderIds.length === 0) return [];
 
       const fullOrders = await this.prisma.order.findMany({
@@ -98,12 +104,10 @@ export class OrdersService {
         select: this.orderSelect(),
       });
 
-      // Ordenar localmente fullOrders basado en la secuencia original (orderIds)
-      const orderMap = new Map(fullOrders.map(o => [o.id, o]));
-      return orderIds.map(id => orderMap.get(id)).filter(Boolean);
+      const orderMap = new Map(fullOrders.map((o) => [o.id, o]));
+      return orderIds.map((id) => orderMap.get(id)).filter(Boolean);
     }
 
-    // Waiter: Solo sus órdenes, ordenadas por fecha de creación (clásico)
     return this.prisma.order.findMany({
       where: { taqueriaId: user.taqueriaId, waiterId: user.id },
       orderBy: { createdAt: 'desc' },
@@ -140,6 +144,9 @@ export class OrdersService {
         taqueriaId: true,
         waiterId: true,
         revision: true,
+        type: true,
+        reference: true,
+        deliveryAddress: true,
         plates: {
           select: {
             plateNumber: true,
@@ -157,44 +164,61 @@ export class OrdersService {
       throw new ForbiddenException('You can only edit your own orders');
     }
 
-    const existingPlateNumbers = new Set(existingOrder.plates.map((plate) => plate.plateNumber));
-    const collidingPlate = updateOrderDto.plates.find((plate) =>
-      existingPlateNumbers.has(plate.plateNumber),
-    );
-    if (collidingPlate) {
-      throw new BadRequestException(
-        `Plate ${collidingPlate.plateNumber} already exists and is immutable. Append a new plate.`,
-      );
-    }
+    // Compute effective type after potential change
+    const effectiveType = updateOrderDto.type ?? existingOrder.type;
+    const effectiveReference = updateOrderDto.reference !== undefined
+      ? updateOrderDto.reference
+      : existingOrder.reference;
+    const effectiveDeliveryAddress = updateOrderDto.deliveryAddress !== undefined
+      ? updateOrderDto.deliveryAddress
+      : existingOrder.deliveryAddress;
 
-    await this.validateProductsOwnership(user.taqueriaId, updateOrderDto.plates);
+    this.validateClassification(effectiveType, effectiveReference, effectiveDeliveryAddress);
+
+    if (updateOrderDto.plates) {
+      const existingPlateNumbers = new Set(existingOrder.plates.map((plate) => plate.plateNumber));
+      const collidingPlate = updateOrderDto.plates.find((plate) =>
+        existingPlateNumbers.has(plate.plateNumber),
+      );
+      if (collidingPlate) {
+        throw new BadRequestException(
+          `Plate ${collidingPlate.plateNumber} already exists and is immutable. Append a new plate.`,
+        );
+      }
+
+      await this.validateProductsOwnership(user.taqueriaId, updateOrderDto.plates);
+    }
 
     const newRevision = existingOrder.revision + 1;
 
-    // Append-only editing: existing plates/items remain immutable.
     await this.prisma.order.update({
       where: { id },
       data: {
         status: OrderStatus.UPDATED,
         revision: newRevision,
         priorityTimestamp: new Date(),
-        plates: {
-          create: updateOrderDto.plates.map((plate) => ({
-            plateNumber: plate.plateNumber,
-            isClosed: false,
-            createdInRevision: newRevision,
-            items: {
-              create: plate.items.map((item) => ({
-                productId: item.productId,
-                quantity: item.quantity,
-                selectedComplements: item.selectedComplements ?? [],
-                notes: item.notes ?? null,
-                isNew: true,
-                createdInRevision: newRevision,
-              })),
-            },
-          })),
-        },
+        type: updateOrderDto.type ?? undefined,
+        reference: updateOrderDto.reference !== undefined ? updateOrderDto.reference : undefined,
+        deliveryAddress: updateOrderDto.deliveryAddress !== undefined ? updateOrderDto.deliveryAddress : undefined,
+        ...(updateOrderDto.plates && {
+          plates: {
+            create: updateOrderDto.plates.map((plate) => ({
+              plateNumber: plate.plateNumber,
+              isClosed: false,
+              createdInRevision: newRevision,
+              items: {
+                create: plate.items.map((item) => ({
+                  productId: item.productId,
+                  quantity: item.quantity,
+                  selectedComplements: item.selectedComplements ?? [],
+                  notes: item.notes ?? null,
+                  isNew: true,
+                  createdInRevision: newRevision,
+                })),
+              },
+            })),
+          },
+        }),
       },
     });
 
@@ -226,7 +250,6 @@ export class OrdersService {
     }
 
     const updatedOrder = await this.prisma.$transaction(async (tx) => {
-      // Limpiar isNew si transiciona a READY desde UPDATED o PREPARING
       if (
         dto.status === OrderStatus.READY &&
         (existingOrder.status === OrderStatus.UPDATED || existingOrder.status === OrderStatus.PREPARING)
@@ -235,7 +258,7 @@ export class OrdersService {
           where: { orderId: id },
           select: { id: true },
         });
-        const plateIds = plates.map(p => p.id);
+        const plateIds = plates.map((p) => p.id);
 
         if (plateIds.length > 0) {
           await tx.item.updateMany({
@@ -254,6 +277,22 @@ export class OrdersService {
 
     this.realtimeGateway.emitOrderStatusChanged(updatedOrder.taqueriaId, updatedOrder);
     return updatedOrder;
+  }
+
+  private validateClassification(
+    type: OrderType,
+    reference: string | null | undefined,
+    deliveryAddress: string | null | undefined,
+  ): void {
+    if (type === OrderType.DELIVERY) {
+      if (!deliveryAddress || deliveryAddress.trim() === '') {
+        throw new BadRequestException('deliveryAddress is required for DELIVERY orders');
+      }
+    } else {
+      if (!reference || reference.trim() === '') {
+        throw new BadRequestException('reference is required for DINE_IN and TAKEAWAY orders');
+      }
+    }
   }
 
   private async validateProductsOwnership(
@@ -279,7 +318,9 @@ export class OrdersService {
       id: true,
       taqueriaId: true,
       waiterId: true,
-      tableNumber: true,
+      type: true,
+      reference: true,
+      deliveryAddress: true,
       status: true,
       revision: true,
       priorityTimestamp: true,

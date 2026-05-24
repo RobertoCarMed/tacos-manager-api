@@ -89,6 +89,13 @@ Cada taquería tiene un `restaurantCode` único (ej. `TM-4821`). El JWT contiene
 
 **Jerarquía**: `Order → Plate → Item`
 
+**Clasificación por tipo** (`OrderType`):
+- `DINE_IN` — requiere `reference` (número de mesa). Default.
+- `TAKEAWAY` — requiere `reference` (nombre del cliente).
+- `DELIVERY` — requiere `deliveryAddress`. `reference` queda en null.
+
+El campo `tableNumber` fue renombrado a `reference (String?)` en la migración 4.6.1.
+
 **Prioridad de cocina** (orden de la cola FIFO):
 1. `UPDATED` (máxima prioridad)
 2. `PENDING`
@@ -138,8 +145,10 @@ Dentro de cada grupo: orden ASC por `priorityTimestamp`.
 | 4.1   | Órdenes CRUD                       | ✅     |
 | 4.2   | Cola de cocina FIFO                | ✅     |
 | 4.3   | Socket.IO Foundation               | ✅     |
-| 4.4   | Kitchen Realtime                   | ⬜     |
-| 4.5–8 | Realtime avanzado + Performance    | ⬜     |
+| 4.4   | Kitchen Realtime                   | ✅     |
+| 4.5   | React Native Socket Migration      | ⬜     |
+| 4.6.1 | Order Classification — Backend     | 🟡     |
+| 4.7–9 | Realtime avanzado + Performance    | ⬜     |
 | 5     | Analytics & Reportes               | ⬜     |
 | 6     | Infraestructura de producción      | ⬜     |
 

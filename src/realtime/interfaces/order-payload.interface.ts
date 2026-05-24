@@ -1,4 +1,4 @@
-import { OrderStatus } from '@prisma/client';
+import { OrderStatus, OrderType } from '@prisma/client';
 
 export interface OrderItemPayload {
   id: string;
@@ -24,7 +24,9 @@ export interface OrderRealtimePayload {
   id: string;
   taqueriaId: string;
   waiterId: string;
-  tableNumber: string;
+  type: OrderType;
+  reference: string | null;
+  deliveryAddress: string | null;
   status: OrderStatus;
   revision: number;
   priorityTimestamp: Date;

@@ -1,14 +1,18 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
+  IsEnum,
   IsInt,
+  IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
+import { OrderType } from '@prisma/client';
 
 class UpdateOrderItemDto {
   @IsUUID()
@@ -43,9 +47,30 @@ class UpdateOrderPlateDto {
 }
 
 export class UpdateOrderDto {
+  @IsOptional()
+  @IsEnum(OrderType)
+  type?: OrderType;
+
+  // Required for DINE_IN and TAKEAWAY when type is being changed to those values
+  @ValidateIf((o) => o.type === OrderType.DINE_IN || o.type === OrderType.TAKEAWAY)
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @IsNotEmpty()
+  reference?: string;
+
+  // Required for DELIVERY when type is being changed to DELIVERY
+  @ValidateIf((o) => o.type === OrderType.DELIVERY)
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @IsNotEmpty()
+  deliveryAddress?: string;
+
+  @IsOptional()
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => UpdateOrderPlateDto)
-  plates: UpdateOrderPlateDto[];
+  plates?: UpdateOrderPlateDto[];
 }

@@ -2,14 +2,17 @@ import { Transform, Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
+  IsEnum,
   IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
+import { OrderType } from '@prisma/client';
 
 class CreateOrderItemDto {
   @IsUUID()
@@ -44,10 +47,22 @@ class CreateOrderPlateDto {
 }
 
 export class CreateOrderDto {
+  @IsEnum(OrderType)
+  type: OrderType;
+
+  // Required for DINE_IN and TAKEAWAY
+  @ValidateIf((o) => o.type === OrderType.DINE_IN || o.type === OrderType.TAKEAWAY)
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @IsNotEmpty()
-  tableNumber: string;
+  reference?: string;
+
+  // Required for DELIVERY
+  @ValidateIf((o) => o.type === OrderType.DELIVERY)
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @IsNotEmpty()
+  deliveryAddress?: string;
 
   @IsArray()
   @ArrayMinSize(1)
