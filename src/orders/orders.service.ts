@@ -12,6 +12,8 @@ import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { AuthenticatedUser } from './interfaces/authenticated-user.interface';
 
+const TERMINAL_STATUSES = [OrderStatus.DELIVERED, OrderStatus.CANCELLED] as const;
+
 @Injectable()
 export class OrdersService {
   constructor(
@@ -69,6 +71,8 @@ export class OrdersService {
 
   async getOrders(user: AuthenticatedUser) {
     if (user.role === UserRole.COOK) {
+      // ETAPA 4.5.6.1 — nueva prioridad: PREPARING > PENDING > READY > DELIVERED > CANCELLED
+      // UPDATED conserva peso 1 para compatibilidad con registros históricos (tratado como PREPARING)
       const orders = await this.prisma.$queryRaw`
         SELECT
           o.id,
@@ -85,12 +89,12 @@ export class OrdersService {
         WHERE o."taqueriaId" = ${user.taqueriaId}
         ORDER BY
           CASE o.status::text
+            WHEN 'PREPARING'  THEN 1
             WHEN 'UPDATED'    THEN 1
             WHEN 'PENDING'    THEN 2
-            WHEN 'PREPARING'  THEN 3
-            WHEN 'READY'      THEN 4
-            WHEN 'DELIVERED'  THEN 5
-            WHEN 'CANCELLED'  THEN 6
+            WHEN 'READY'      THEN 3
+            WHEN 'DELIVERED'  THEN 4
+            WHEN 'CANCELLED'  THEN 5
           END ASC,
           o."priorityTimestamp" ASC
       `;
@@ -143,6 +147,7 @@ export class OrdersService {
         id: true,
         taqueriaId: true,
         waiterId: true,
+        status: true,
         revision: true,
         type: true,
         reference: true,
@@ -164,7 +169,7 @@ export class OrdersService {
       throw new ForbiddenException('You can only edit your own orders');
     }
 
-    // Compute effective type after potential change
+    // Compute effective classification after potential type/reference/address change
     const effectiveType = updateOrderDto.type ?? existingOrder.type;
     const effectiveReference = updateOrderDto.reference !== undefined
       ? updateOrderDto.reference
@@ -175,7 +180,39 @@ export class OrdersService {
 
     this.validateClassification(effectiveType, effectiveReference, effectiveDeliveryAddress);
 
+    // ETAPA 4.5.6.1 — Append-only status rules (CASO 1/2/3)
+    // Only apply when new plates are being added (metadata-only changes keep current status)
+    let newStatus = existingOrder.status;
+    let updatePriorityTimestamp = false;
+
     if (updateOrderDto.plates) {
+      if ((TERMINAL_STATUSES as readonly OrderStatus[]).includes(existingOrder.status)) {
+        throw new BadRequestException(
+          `Cannot add items to an order with status ${existingOrder.status}`,
+        );
+      }
+
+      switch (existingOrder.status) {
+        case OrderStatus.PENDING:
+          // CASO 1: permanece PENDING, posición FIFO conservada
+          newStatus = OrderStatus.PENDING;
+          updatePriorityTimestamp = false;
+          break;
+
+        case OrderStatus.PREPARING:
+        case OrderStatus.UPDATED: // legacy — tratado como PREPARING
+          // CASO 2: permanece PREPARING
+          newStatus = OrderStatus.PREPARING;
+          updatePriorityTimestamp = true;
+          break;
+
+        case OrderStatus.READY:
+          // CASO 3: revierte a PENDING para que cocina prepare los nuevos items
+          newStatus = OrderStatus.PENDING;
+          updatePriorityTimestamp = false;
+          break;
+      }
+
       const existingPlateNumbers = new Set(existingOrder.plates.map((plate) => plate.plateNumber));
       const collidingPlate = updateOrderDto.plates.find((plate) =>
         existingPlateNumbers.has(plate.plateNumber),
@@ -194,9 +231,9 @@ export class OrdersService {
     await this.prisma.order.update({
       where: { id },
       data: {
-        status: OrderStatus.UPDATED,
+        status: newStatus,
         revision: newRevision,
-        priorityTimestamp: new Date(),
+        ...(updatePriorityTimestamp && { priorityTimestamp: new Date() }),
         type: updateOrderDto.type ?? undefined,
         reference: updateOrderDto.reference !== undefined ? updateOrderDto.reference : undefined,
         deliveryAddress: updateOrderDto.deliveryAddress !== undefined ? updateOrderDto.deliveryAddress : undefined,
@@ -250,10 +287,8 @@ export class OrdersService {
     }
 
     const updatedOrder = await this.prisma.$transaction(async (tx) => {
-      if (
-        dto.status === OrderStatus.READY &&
-        (existingOrder.status === OrderStatus.UPDATED || existingOrder.status === OrderStatus.PREPARING)
-      ) {
+      // ETAPA 4.5.6.1 — limpiar isNew en cualquier transición a READY
+      if (dto.status === OrderStatus.READY) {
         const plates = await tx.plate.findMany({
           where: { orderId: id },
           select: { id: true },

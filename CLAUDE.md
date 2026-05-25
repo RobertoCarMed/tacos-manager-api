@@ -96,17 +96,18 @@ Cada taquería tiene un `restaurantCode` único (ej. `TM-4821`). El JWT contiene
 
 El campo `tableNumber` fue renombrado a `reference (String?)` en la migración 4.6.1.
 
-**Prioridad de cocina** (orden de la cola FIFO):
-1. `UPDATED` (máxima prioridad)
+**Prioridad de cocina** (orden de la cola FIFO — implementado en ETAPA 4.5.6.1):
+1. `PREPARING` (máxima prioridad — trabajo activo del cocinero)
 2. `PENDING`
-3. `PREPARING`
-4. `READY`
-5. `DELIVERED`
-6. `CANCELLED`
+3. `READY`
+4. `DELIVERED`
+5. `CANCELLED`
+
+`UPDATED` deprecado operacionalmente — no se asigna en nuevas transiciones. El enum se conserva en DB para registros históricos (peso 1 junto a PREPARING en la query SQL).
 
 Dentro de cada grupo: orden ASC por `priorityTimestamp`.
 
-**`isNew`** en `Item`: flag para highlight verde en cocina. Visible cuando la orden está en `UPDATED` o `PREPARING`; desaparece al pasar a `READY`.
+**`isNew`** en `Item`: flag para highlight verde en cocina. `true` cuando el item fue agregado por `PATCH /orders/:id` (append). Se limpia a `false` en la transacción que mueve la orden a `READY`.
 
 ## Flujo de registro (2 fases)
 
@@ -147,6 +148,7 @@ Dentro de cada grupo: orden ASC por `priorityTimestamp`.
 | 4.3   | Socket.IO Foundation               | ✅     |
 | 4.4   | Kitchen Realtime                   | ✅     |
 | 4.5   | React Native Socket Migration      | ⬜     |
+| 4.5.6.1 | Backend Queue Rules              | ✅     |
 | 4.6.1 | Order Classification — Backend     | 🟡     |
 | 4.7–9 | Realtime avanzado + Performance    | ⬜     |
 | 5     | Analytics & Reportes               | ⬜     |

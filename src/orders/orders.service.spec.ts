@@ -61,12 +61,12 @@ describe('OrdersService', () => {
   describe('Kitchen Queue Logic (FIFO)', () => {
     const simulateDatabaseSort = (orders: any[]) => {
       const statusWeight: Record<string, number> = {
-        UPDATED: 1,
+        PREPARING: 1,
+        UPDATED: 1, // legacy — treated as PREPARING
         PENDING: 2,
-        PREPARING: 3,
-        READY: 4,
-        DELIVERED: 5,
-        CANCELLED: 6,
+        READY: 3,
+        DELIVERED: 4,
+        CANCELLED: 5,
       };
 
       return [...orders].sort((a, b) => {
@@ -91,10 +91,10 @@ describe('OrdersService', () => {
       expect(sorted[1].id).toBe('2');
     });
 
-    it('Caso 2: UPDATED vs PENDING vs PENDING -> UPDATED primero, luego PENDING en FIFO', () => {
+    it('Caso 2: PREPARING vs PENDING -> PREPARING primero, luego PENDING en FIFO', () => {
       const orderA = { id: '1', status: 'PENDING', priorityTimestamp: new Date('2026-05-19T12:00:00Z') };
       const orderB = { id: '2', status: 'PENDING', priorityTimestamp: new Date('2026-05-19T12:05:00Z') };
-      const orderC = { id: '3', status: 'UPDATED', priorityTimestamp: new Date('2026-05-19T12:15:00Z') };
+      const orderC = { id: '3', status: 'PREPARING', priorityTimestamp: new Date('2026-05-19T12:15:00Z') };
 
       const sorted = simulateDatabaseSort([orderA, orderC, orderB]);
 
@@ -103,9 +103,9 @@ describe('OrdersService', () => {
       expect(sorted[2].id).toBe('2');
     });
 
-    it('Caso 3: UPDATED vs UPDATED -> FIFO (La actualización más antigua va primero)', () => {
-      const orderA = { id: '1', status: 'UPDATED', priorityTimestamp: new Date('2026-05-19T12:00:00Z') };
-      const orderB = { id: '2', status: 'UPDATED', priorityTimestamp: new Date('2026-05-19T12:10:00Z') };
+    it('Caso 3: PREPARING vs PREPARING -> FIFO (La actualización más antigua va primero)', () => {
+      const orderA = { id: '1', status: 'PREPARING', priorityTimestamp: new Date('2026-05-19T12:00:00Z') };
+      const orderB = { id: '2', status: 'PREPARING', priorityTimestamp: new Date('2026-05-19T12:10:00Z') };
 
       const sorted = simulateDatabaseSort([orderB, orderA]);
 
@@ -129,6 +129,122 @@ describe('OrdersService', () => {
       const sqlString = Array.isArray(queryArg) ? queryArg.join('?') : queryArg;
 
       expect(sqlString).toContain('o."priorityTimestamp" ASC');
+    });
+  });
+
+  // ─── Queue Rules (ETAPA 4.5.6.1) ─────────────────────────────────────────
+
+  describe('Queue Rules (ETAPA 4.5.6.1)', () => {
+    const waiterUser = {
+      id: 'waiter-1',
+      role: UserRole.WAITER,
+      taqueriaId: 't-1',
+      name: 'Mesero',
+      email: 'mesero@t.com',
+    };
+
+    const addPlatesDto = {
+      plates: [
+        {
+          plateNumber: 1,
+          items: [{ productId: 'prod-1', quantity: 1, selectedComplements: [], notes: null }],
+        },
+      ],
+    };
+
+    const baseExistingOrder = {
+      id: 'order-1',
+      taqueriaId: 't-1',
+      waiterId: 'waiter-1',
+      revision: 1,
+      type: OrderType.DINE_IN,
+      reference: 'Mesa 5',
+      deliveryAddress: null,
+      plates: [],
+    };
+
+    const fullUpdatedOrder = {
+      id: 'order-1',
+      taqueriaId: 't-1',
+      waiterId: 'waiter-1',
+      type: OrderType.DINE_IN,
+      reference: 'Mesa 5',
+      deliveryAddress: null,
+      status: OrderStatus.PENDING,
+      revision: 2,
+      priorityTimestamp: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      plates: [],
+    };
+
+    const setupUpdateOrderMocks = (existingStatus: OrderStatus) => {
+      prisma.order.findUnique
+        .mockResolvedValueOnce({ ...baseExistingOrder, status: existingStatus })
+        .mockResolvedValueOnce(fullUpdatedOrder);
+      prisma.product.findMany.mockResolvedValue([{ id: 'prod-1' }]);
+      prisma.order.update.mockResolvedValue({});
+    };
+
+    it('Caso 1: pedido PENDING editado debe permanecer en PENDING sin actualizar priorityTimestamp', async () => {
+      setupUpdateOrderMocks(OrderStatus.PENDING);
+
+      await service.updateOrder(waiterUser, 'order-1', addPlatesDto as any);
+
+      const updateCall = prisma.order.update.mock.calls[0][0];
+      expect(updateCall.data.status).toBe(OrderStatus.PENDING);
+      expect(updateCall.data).not.toHaveProperty('priorityTimestamp');
+    });
+
+    it('Caso 2: pedido PREPARING editado debe permanecer en PREPARING con priorityTimestamp actualizado', async () => {
+      setupUpdateOrderMocks(OrderStatus.PREPARING);
+
+      await service.updateOrder(waiterUser, 'order-1', addPlatesDto as any);
+
+      const updateCall = prisma.order.update.mock.calls[0][0];
+      expect(updateCall.data.status).toBe(OrderStatus.PREPARING);
+      expect(updateCall.data.priorityTimestamp).toBeInstanceOf(Date);
+    });
+
+    it('Caso 3: pedido READY editado debe volver a PENDING sin actualizar priorityTimestamp', async () => {
+      setupUpdateOrderMocks(OrderStatus.READY);
+
+      await service.updateOrder(waiterUser, 'order-1', addPlatesDto as any);
+
+      const updateCall = prisma.order.update.mock.calls[0][0];
+      expect(updateCall.data.status).toBe(OrderStatus.PENDING);
+      expect(updateCall.data).not.toHaveProperty('priorityTimestamp');
+    });
+
+    it('Caso 4: items agregados en un plate nuevo deben tener isNew: true', async () => {
+      setupUpdateOrderMocks(OrderStatus.PENDING);
+
+      await service.updateOrder(waiterUser, 'order-1', addPlatesDto as any);
+
+      const updateCall = prisma.order.update.mock.calls[0][0];
+      const createdItems = updateCall.data.plates.create[0].items.create;
+      expect(createdItems[0]).toMatchObject({ isNew: true });
+    });
+
+    it('Caso 5: emite emitOrderUpdated con los datos correctos después de actualizar', async () => {
+      setupUpdateOrderMocks(OrderStatus.PENDING);
+
+      await service.updateOrder(waiterUser, 'order-1', addPlatesDto as any);
+
+      expect(mockRealtimeGateway.emitOrderUpdated).toHaveBeenCalledWith(
+        fullUpdatedOrder.taqueriaId,
+        fullUpdatedOrder,
+      );
+    });
+
+    it('Caso 6: pedido UPDATED (legacy) editado debe pasar a PREPARING con priorityTimestamp actualizado', async () => {
+      setupUpdateOrderMocks(OrderStatus.UPDATED);
+
+      await service.updateOrder(waiterUser, 'order-1', addPlatesDto as any);
+
+      const updateCall = prisma.order.update.mock.calls[0][0];
+      expect(updateCall.data.status).toBe(OrderStatus.PREPARING);
+      expect(updateCall.data.priorityTimestamp).toBeInstanceOf(Date);
     });
   });
 
