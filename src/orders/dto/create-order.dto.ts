@@ -51,7 +51,9 @@ export class CreateOrderDto {
   type: OrderType;
 
   // Required for DINE_IN and TAKEAWAY
-  @ValidateIf((o) => o.type === OrderType.DINE_IN || o.type === OrderType.TAKEAWAY)
+  @ValidateIf(
+    (o) => o.type === OrderType.DINE_IN || o.type === OrderType.TAKEAWAY,
+  )
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @IsNotEmpty()

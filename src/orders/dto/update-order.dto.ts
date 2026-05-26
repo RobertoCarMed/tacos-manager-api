@@ -52,7 +52,9 @@ export class UpdateOrderDto {
   type?: OrderType;
 
   // Required for DINE_IN and TAKEAWAY when type is being changed to those values
-  @ValidateIf((o) => o.type === OrderType.DINE_IN || o.type === OrderType.TAKEAWAY)
+  @ValidateIf(
+    (o) => o.type === OrderType.DINE_IN || o.type === OrderType.TAKEAWAY,
+  )
   @IsOptional()
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()

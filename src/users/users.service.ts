@@ -19,7 +19,9 @@ export class UsersService {
     });
   }
 
-  findTaqueriaByRestaurantCode(restaurantCode: string): Promise<Taqueria | null> {
+  findTaqueriaByRestaurantCode(
+    restaurantCode: string,
+  ): Promise<Taqueria | null> {
     return this.prisma.taqueria.findUnique({
       where: { restaurantCode },
     });

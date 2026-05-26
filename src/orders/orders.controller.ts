@@ -25,7 +25,10 @@ export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @Post()
-  create(@Req() req: AuthenticatedRequest, @Body() createOrderDto: CreateOrderDto) {
+  create(
+    @Req() req: AuthenticatedRequest,
+    @Body() createOrderDto: CreateOrderDto,
+  ) {
     return this.ordersService.createOrder(req.user, createOrderDto);
   }
 
@@ -54,6 +57,10 @@ export class OrdersController {
     @Param('id') id: string,
     @Body() updateOrderStatusDto: UpdateOrderStatusDto,
   ) {
-    return this.ordersService.updateOrderStatus(req.user, id, updateOrderStatusDto);
+    return this.ordersService.updateOrderStatus(
+      req.user,
+      id,
+      updateOrderStatusDto,
+    );
   }
 }

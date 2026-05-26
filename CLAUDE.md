@@ -164,8 +164,8 @@ Dentro de cada grupo: orden ASC por `priorityTimestamp`.
 | 4.5.6.1 | Backend Queue Rules              | ✅     |
 | 4.6.1 | Order Classification — Backend     | ✅     |
 | 4.7   | Realtime Reliability               | ✅     |
-| 5.0.1 | Environment Strategy — Backend    | 🟡     |
-| 5.0.2 | Backend Deployment                 | ⬜     |
+| 5.0.1 | Environment Strategy — Backend    | ✅     |
+| 5.0.2 | Backend Deployment                 | 🟡     |
 
 ## Documentación
 

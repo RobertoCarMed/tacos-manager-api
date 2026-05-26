@@ -5,8 +5,6 @@ import { PrismaClient } from '@prisma/client';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit {
-  private static isConnected = false;
-
   constructor(config: ConfigService) {
     const connectionString = config.getOrThrow<string>('DATABASE_URL');
     super({
@@ -15,9 +13,6 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
   }
 
   async onModuleInit(): Promise<void> {
-    if (!PrismaService.isConnected) {
-      await this.$connect();
-      PrismaService.isConnected = true;
-    }
+    await this.$connect();
   }
 }

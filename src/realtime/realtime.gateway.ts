@@ -87,40 +87,66 @@ export class RealtimeGateway
 
   emitOrderCreated(taqueriaId: string, order: OrderRealtimePayload): void {
     if (!this.server) {
-      this.logger.warn('WebSocket server not ready — skipping order-created emission');
+      this.logger.warn(
+        'WebSocket server not ready — skipping order-created emission',
+      );
       return;
     }
     try {
       this.server.to(`taqueria:${taqueriaId}`).emit('order-created', { order });
-      this.logger.log(`order-created → taqueria:${taqueriaId} order=${order.id}`);
+      this.logger.log(
+        `order-created → taqueria:${taqueriaId} order=${order.id}`,
+      );
     } catch (error) {
-      this.logger.error(`Failed to emit order-created order=${order.id}`, error);
+      this.logger.error(
+        `Failed to emit order-created order=${order.id}`,
+        error,
+      );
     }
   }
 
   emitOrderUpdated(taqueriaId: string, order: OrderRealtimePayload): void {
     if (!this.server) {
-      this.logger.warn('WebSocket server not ready — skipping order-updated emission');
+      this.logger.warn(
+        'WebSocket server not ready — skipping order-updated emission',
+      );
       return;
     }
     try {
       this.server.to(`taqueria:${taqueriaId}`).emit('order-updated', { order });
-      this.logger.log(`order-updated → taqueria:${taqueriaId} order=${order.id} rev=${order.revision}`);
+      this.logger.log(
+        `order-updated → taqueria:${taqueriaId} order=${order.id} rev=${order.revision}`,
+      );
     } catch (error) {
-      this.logger.error(`Failed to emit order-updated order=${order.id}`, error);
+      this.logger.error(
+        `Failed to emit order-updated order=${order.id}`,
+        error,
+      );
     }
   }
 
-  emitOrderStatusChanged(taqueriaId: string, order: OrderRealtimePayload): void {
+  emitOrderStatusChanged(
+    taqueriaId: string,
+    order: OrderRealtimePayload,
+  ): void {
     if (!this.server) {
-      this.logger.warn('WebSocket server not ready — skipping order-status-changed emission');
+      this.logger.warn(
+        'WebSocket server not ready — skipping order-status-changed emission',
+      );
       return;
     }
     try {
-      this.server.to(`taqueria:${taqueriaId}`).emit('order-status-changed', { order });
-      this.logger.log(`order-status-changed → taqueria:${taqueriaId} order=${order.id} status=${order.status}`);
+      this.server
+        .to(`taqueria:${taqueriaId}`)
+        .emit('order-status-changed', { order });
+      this.logger.log(
+        `order-status-changed → taqueria:${taqueriaId} order=${order.id} status=${order.status}`,
+      );
     } catch (error) {
-      this.logger.error(`Failed to emit order-status-changed order=${order.id}`, error);
+      this.logger.error(
+        `Failed to emit order-status-changed order=${order.id}`,
+        error,
+      );
     }
   }
 

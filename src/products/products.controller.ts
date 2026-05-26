@@ -29,7 +29,10 @@ export class ProductsController {
 
   @Roles(UserRole.COOK)
   @Post()
-  create(@Req() req: AuthenticatedRequest, @Body() createProductDto: CreateProductDto) {
+  create(
+    @Req() req: AuthenticatedRequest,
+    @Body() createProductDto: CreateProductDto,
+  ) {
     return this.productsService.createProduct(req.user, createProductDto);
   }
 

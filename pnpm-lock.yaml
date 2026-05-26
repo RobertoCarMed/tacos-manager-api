@@ -47,9 +47,6 @@ importers:
       class-validator:
         specifier: ^0.15.1
         version: 0.15.1
-      dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
       passport:
         specifier: ^0.7.0
         version: 0.7.0
@@ -69,9 +66,6 @@ importers:
         specifier: ^7.8.1
         version: 7.8.2
       socket.io:
-        specifier: ^4.8.3
-        version: 4.8.3
-      socket.io-client:
         specifier: ^4.8.3
         version: 4.8.3
     devDependencies:
@@ -129,6 +123,9 @@ importers:
       prettier:
         specifier: ^3.4.2
         version: 3.8.3
+      socket.io-client:
+        specifier: ^4.8.3
+        version: 4.8.3
       source-map-support:
         specifier: ^0.5.21
         version: 0.5.21

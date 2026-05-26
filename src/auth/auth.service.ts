@@ -26,16 +26,22 @@ export class AuthService {
       throw new ConflictException('Email already exists');
     }
 
-    const taqueriaMatches = await this.usersService.findTaqueriasByName(registerDto.taqueriaName);
+    const taqueriaMatches = await this.usersService.findTaqueriasByName(
+      registerDto.taqueriaName,
+    );
 
     // Phase 1: discovery, no side effects.
-    if (!registerDto.confirmJoinExistingTaqueria && !registerDto.createNewTaqueria) {
+    if (
+      !registerDto.confirmJoinExistingTaqueria &&
+      !registerDto.createNewTaqueria
+    ) {
       if (taqueriaMatches.length === 0) {
         return {
           taqueriaMatches: 0,
           canCreateNewTaqueria: true,
           requiresTaqueriaInfo: true,
-          message: 'No encontramos una taquería con este nombre. Puedes crear una nueva.',
+          message:
+            'No encontramos una taquería con este nombre. Puedes crear una nueva.',
         };
       }
 
@@ -122,7 +128,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const isPasswordValid = await bcrypt.compare(loginDto.password, user.password);
+    const isPasswordValid = await bcrypt.compare(
+      loginDto.password,
+      user.password,
+    );
 
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
@@ -136,7 +145,10 @@ export class AuthService {
   }
 
   private validateRegisterFlags(registerDto: RegisterDto): void {
-    if (registerDto.confirmJoinExistingTaqueria && registerDto.createNewTaqueria) {
+    if (
+      registerDto.confirmJoinExistingTaqueria &&
+      registerDto.createNewTaqueria
+    ) {
       throw new BadRequestException(
         'confirmJoinExistingTaqueria and createNewTaqueria cannot both be true.',
       );
@@ -154,7 +166,10 @@ export class AuthService {
       );
     }
 
-    if (registerDto.confirmJoinExistingTaqueria && !registerDto.selectedRestaurantCode) {
+    if (
+      registerDto.confirmJoinExistingTaqueria &&
+      !registerDto.selectedRestaurantCode
+    ) {
       throw new BadRequestException(
         'selectedRestaurantCode is required when confirmJoinExistingTaqueria is true.',
       );

@@ -12,7 +12,10 @@ import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { AuthenticatedUser } from './interfaces/authenticated-user.interface';
 
-const TERMINAL_STATUSES = [OrderStatus.DELIVERED, OrderStatus.CANCELLED] as const;
+const TERMINAL_STATUSES = [
+  OrderStatus.DELIVERED,
+  OrderStatus.CANCELLED,
+] as const;
 
 @Injectable()
 export class OrdersService {
@@ -32,7 +35,10 @@ export class OrdersService {
       createOrderDto.deliveryAddress,
     );
 
-    await this.validateProductsOwnership(user.taqueriaId, createOrderDto.plates);
+    await this.validateProductsOwnership(
+      user.taqueriaId,
+      createOrderDto.plates,
+    );
 
     const order = await this.prisma.order.create({
       data: {
@@ -136,7 +142,11 @@ export class OrdersService {
     return order;
   }
 
-  async updateOrder(user: AuthenticatedUser, id: string, updateOrderDto: UpdateOrderDto) {
+  async updateOrder(
+    user: AuthenticatedUser,
+    id: string,
+    updateOrderDto: UpdateOrderDto,
+  ) {
     if (user.role !== UserRole.WAITER) {
       throw new ForbiddenException('Only WAITER can edit orders');
     }
@@ -171,14 +181,20 @@ export class OrdersService {
 
     // Compute effective classification after potential type/reference/address change
     const effectiveType = updateOrderDto.type ?? existingOrder.type;
-    const effectiveReference = updateOrderDto.reference !== undefined
-      ? updateOrderDto.reference
-      : existingOrder.reference;
-    const effectiveDeliveryAddress = updateOrderDto.deliveryAddress !== undefined
-      ? updateOrderDto.deliveryAddress
-      : existingOrder.deliveryAddress;
+    const effectiveReference =
+      updateOrderDto.reference !== undefined
+        ? updateOrderDto.reference
+        : existingOrder.reference;
+    const effectiveDeliveryAddress =
+      updateOrderDto.deliveryAddress !== undefined
+        ? updateOrderDto.deliveryAddress
+        : existingOrder.deliveryAddress;
 
-    this.validateClassification(effectiveType, effectiveReference, effectiveDeliveryAddress);
+    this.validateClassification(
+      effectiveType,
+      effectiveReference,
+      effectiveDeliveryAddress,
+    );
 
     // ETAPA 4.5.6.1 — Append-only status rules (CASO 1/2/3)
     // Only apply when new plates are being added (metadata-only changes keep current status)
@@ -186,7 +202,11 @@ export class OrdersService {
     let updatePriorityTimestamp = false;
 
     if (updateOrderDto.plates) {
-      if ((TERMINAL_STATUSES as readonly OrderStatus[]).includes(existingOrder.status)) {
+      if (
+        (TERMINAL_STATUSES as readonly OrderStatus[]).includes(
+          existingOrder.status,
+        )
+      ) {
         throw new BadRequestException(
           `Cannot add items to an order with status ${existingOrder.status}`,
         );
@@ -213,7 +233,9 @@ export class OrdersService {
           break;
       }
 
-      const existingPlateNumbers = new Set(existingOrder.plates.map((plate) => plate.plateNumber));
+      const existingPlateNumbers = new Set(
+        existingOrder.plates.map((plate) => plate.plateNumber),
+      );
       const collidingPlate = updateOrderDto.plates.find((plate) =>
         existingPlateNumbers.has(plate.plateNumber),
       );
@@ -223,7 +245,10 @@ export class OrdersService {
         );
       }
 
-      await this.validateProductsOwnership(user.taqueriaId, updateOrderDto.plates);
+      await this.validateProductsOwnership(
+        user.taqueriaId,
+        updateOrderDto.plates,
+      );
     }
 
     const newRevision = existingOrder.revision + 1;
@@ -235,8 +260,14 @@ export class OrdersService {
         revision: newRevision,
         ...(updatePriorityTimestamp && { priorityTimestamp: new Date() }),
         type: updateOrderDto.type ?? undefined,
-        reference: updateOrderDto.reference !== undefined ? updateOrderDto.reference : undefined,
-        deliveryAddress: updateOrderDto.deliveryAddress !== undefined ? updateOrderDto.deliveryAddress : undefined,
+        reference:
+          updateOrderDto.reference !== undefined
+            ? updateOrderDto.reference
+            : undefined,
+        deliveryAddress:
+          updateOrderDto.deliveryAddress !== undefined
+            ? updateOrderDto.deliveryAddress
+            : undefined,
         ...(updateOrderDto.plates && {
           plates: {
             create: updateOrderDto.plates.map((plate) => ({
@@ -260,11 +291,18 @@ export class OrdersService {
     });
 
     const updatedOrder = await this.getOrderById(user, id);
-    this.realtimeGateway.emitOrderUpdated(updatedOrder.taqueriaId, updatedOrder);
+    this.realtimeGateway.emitOrderUpdated(
+      updatedOrder.taqueriaId,
+      updatedOrder,
+    );
     return updatedOrder;
   }
 
-  async updateOrderStatus(user: AuthenticatedUser, id: string, dto: UpdateOrderStatusDto) {
+  async updateOrderStatus(
+    user: AuthenticatedUser,
+    id: string,
+    dto: UpdateOrderStatusDto,
+  ) {
     if (user.role !== UserRole.COOK) {
       throw new ForbiddenException('Only COOK can update order status');
     }
@@ -310,7 +348,10 @@ export class OrdersService {
       });
     });
 
-    this.realtimeGateway.emitOrderStatusChanged(updatedOrder.taqueriaId, updatedOrder);
+    this.realtimeGateway.emitOrderStatusChanged(
+      updatedOrder.taqueriaId,
+      updatedOrder,
+    );
     return updatedOrder;
   }
 
@@ -321,11 +362,15 @@ export class OrdersService {
   ): void {
     if (type === OrderType.DELIVERY) {
       if (!deliveryAddress || deliveryAddress.trim() === '') {
-        throw new BadRequestException('deliveryAddress is required for DELIVERY orders');
+        throw new BadRequestException(
+          'deliveryAddress is required for DELIVERY orders',
+        );
       }
     } else {
       if (!reference || reference.trim() === '') {
-        throw new BadRequestException('reference is required for DINE_IN and TAKEAWAY orders');
+        throw new BadRequestException(
+          'reference is required for DINE_IN and TAKEAWAY orders',
+        );
       }
     }
   }
@@ -334,7 +379,11 @@ export class OrdersService {
     taqueriaId: string,
     plates: Array<{ items: Array<{ productId: string }> }>,
   ) {
-    const productIds = [...new Set(plates.flatMap((plate) => plate.items.map((item) => item.productId)))];
+    const productIds = [
+      ...new Set(
+        plates.flatMap((plate) => plate.items.map((item) => item.productId)),
+      ),
+    ];
     const products = await this.prisma.product.findMany({
       where: {
         id: { in: productIds },
@@ -344,7 +393,9 @@ export class OrdersService {
     });
 
     if (products.length !== productIds.length) {
-      throw new BadRequestException('One or more products are invalid for this taqueria');
+      throw new BadRequestException(
+        'One or more products are invalid for this taqueria',
+      );
     }
   }
 

@@ -1,4 +1,6 @@
-export function validateEnv(config: Record<string, unknown>): Record<string, unknown> {
+export function validateEnv(
+  config: Record<string, unknown>,
+): Record<string, unknown> {
   if (config['NODE_ENV'] === 'test') return config;
 
   const required = ['DATABASE_URL', 'JWT_SECRET'];

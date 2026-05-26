@@ -82,8 +82,16 @@ describe('OrdersService', () => {
     };
 
     it('Caso 1: PENDING vs PENDING -> FIFO (El más antiguo primero)', () => {
-      const orderA = { id: '1', status: 'PENDING', priorityTimestamp: new Date('2026-05-19T12:00:00Z') };
-      const orderB = { id: '2', status: 'PENDING', priorityTimestamp: new Date('2026-05-19T12:05:00Z') };
+      const orderA = {
+        id: '1',
+        status: 'PENDING',
+        priorityTimestamp: new Date('2026-05-19T12:00:00Z'),
+      };
+      const orderB = {
+        id: '2',
+        status: 'PENDING',
+        priorityTimestamp: new Date('2026-05-19T12:05:00Z'),
+      };
 
       const sorted = simulateDatabaseSort([orderB, orderA]);
 
@@ -92,9 +100,21 @@ describe('OrdersService', () => {
     });
 
     it('Caso 2: PREPARING vs PENDING -> PREPARING primero, luego PENDING en FIFO', () => {
-      const orderA = { id: '1', status: 'PENDING', priorityTimestamp: new Date('2026-05-19T12:00:00Z') };
-      const orderB = { id: '2', status: 'PENDING', priorityTimestamp: new Date('2026-05-19T12:05:00Z') };
-      const orderC = { id: '3', status: 'PREPARING', priorityTimestamp: new Date('2026-05-19T12:15:00Z') };
+      const orderA = {
+        id: '1',
+        status: 'PENDING',
+        priorityTimestamp: new Date('2026-05-19T12:00:00Z'),
+      };
+      const orderB = {
+        id: '2',
+        status: 'PENDING',
+        priorityTimestamp: new Date('2026-05-19T12:05:00Z'),
+      };
+      const orderC = {
+        id: '3',
+        status: 'PREPARING',
+        priorityTimestamp: new Date('2026-05-19T12:15:00Z'),
+      };
 
       const sorted = simulateDatabaseSort([orderA, orderC, orderB]);
 
@@ -104,8 +124,16 @@ describe('OrdersService', () => {
     });
 
     it('Caso 3: PREPARING vs PREPARING -> FIFO (La actualización más antigua va primero)', () => {
-      const orderA = { id: '1', status: 'PREPARING', priorityTimestamp: new Date('2026-05-19T12:00:00Z') };
-      const orderB = { id: '2', status: 'PREPARING', priorityTimestamp: new Date('2026-05-19T12:10:00Z') };
+      const orderA = {
+        id: '1',
+        status: 'PREPARING',
+        priorityTimestamp: new Date('2026-05-19T12:00:00Z'),
+      };
+      const orderB = {
+        id: '2',
+        status: 'PREPARING',
+        priorityTimestamp: new Date('2026-05-19T12:10:00Z'),
+      };
 
       const sorted = simulateDatabaseSort([orderB, orderA]);
 
@@ -118,7 +146,13 @@ describe('OrdersService', () => {
 
   describe('getOrders', () => {
     it('debería solicitar a Prisma el orden correcto (ASC para FIFO) cuando el usuario es COOK', async () => {
-      const cookUser = { id: 'cook-1', role: UserRole.COOK, taqueriaId: 't-1', name: 'Chef', email: 'chef@t.com' };
+      const cookUser = {
+        id: 'cook-1',
+        role: UserRole.COOK,
+        taqueriaId: 't-1',
+        name: 'Chef',
+        email: 'chef@t.com',
+      };
       prisma.$queryRaw.mockResolvedValue([]);
 
       await service.getOrders(cookUser);
@@ -147,7 +181,14 @@ describe('OrdersService', () => {
       plates: [
         {
           plateNumber: 1,
-          items: [{ productId: 'prod-1', quantity: 1, selectedComplements: [], notes: null }],
+          items: [
+            {
+              productId: 'prod-1',
+              quantity: 1,
+              selectedComplements: [],
+              notes: null,
+            },
+          ],
         },
       ],
     };
@@ -284,7 +325,14 @@ describe('OrdersService', () => {
         plates: [
           {
             plateNumber: 1,
-            items: [{ productId: 'prod-1', quantity: 2, selectedComplements: [], notes: null }],
+            items: [
+              {
+                productId: 'prod-1',
+                quantity: 2,
+                selectedComplements: [],
+                notes: null,
+              },
+            ],
           },
         ],
       };
@@ -304,7 +352,11 @@ describe('OrdersService', () => {
     });
 
     it('Caso 5: TAKEAWAY con reference → crea la orden correctamente', async () => {
-      const takeawayOrder = { ...mockCreatedOrder, type: OrderType.TAKEAWAY, reference: 'Juan' };
+      const takeawayOrder = {
+        ...mockCreatedOrder,
+        type: OrderType.TAKEAWAY,
+        reference: 'Juan',
+      };
       prisma.product.findMany.mockResolvedValue([{ id: 'prod-1' }]);
       prisma.order.create.mockResolvedValue(takeawayOrder);
 
@@ -314,7 +366,14 @@ describe('OrdersService', () => {
         plates: [
           {
             plateNumber: 1,
-            items: [{ productId: 'prod-1', quantity: 1, selectedComplements: [], notes: null }],
+            items: [
+              {
+                productId: 'prod-1',
+                quantity: 1,
+                selectedComplements: [],
+                notes: null,
+              },
+            ],
           },
         ],
       };
@@ -324,7 +383,10 @@ describe('OrdersService', () => {
       expect(result.type).toBe(OrderType.TAKEAWAY);
       expect(prisma.order.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ type: OrderType.TAKEAWAY, reference: 'Juan' }),
+          data: expect.objectContaining({
+            type: OrderType.TAKEAWAY,
+            reference: 'Juan',
+          }),
         }),
       );
     });
@@ -345,7 +407,14 @@ describe('OrdersService', () => {
         plates: [
           {
             plateNumber: 1,
-            items: [{ productId: 'prod-1', quantity: 1, selectedComplements: [], notes: null }],
+            items: [
+              {
+                productId: 'prod-1',
+                quantity: 1,
+                selectedComplements: [],
+                notes: null,
+              },
+            ],
           },
         ],
       };
@@ -355,7 +424,10 @@ describe('OrdersService', () => {
       expect(result.type).toBe(OrderType.DELIVERY);
       expect(prisma.order.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ type: OrderType.DELIVERY, deliveryAddress: 'Calle Falsa 123' }),
+          data: expect.objectContaining({
+            type: OrderType.DELIVERY,
+            deliveryAddress: 'Calle Falsa 123',
+          }),
         }),
       );
     });
@@ -366,12 +438,21 @@ describe('OrdersService', () => {
         plates: [
           {
             plateNumber: 1,
-            items: [{ productId: 'prod-1', quantity: 1, selectedComplements: [], notes: null }],
+            items: [
+              {
+                productId: 'prod-1',
+                quantity: 1,
+                selectedComplements: [],
+                notes: null,
+              },
+            ],
           },
         ],
       };
 
-      await expect(service.createOrder(waiterUser, dto as any)).rejects.toThrow(BadRequestException);
+      await expect(service.createOrder(waiterUser, dto as any)).rejects.toThrow(
+        BadRequestException,
+      );
       expect(prisma.order.create).not.toHaveBeenCalled();
     });
 
@@ -381,12 +462,21 @@ describe('OrdersService', () => {
         plates: [
           {
             plateNumber: 1,
-            items: [{ productId: 'prod-1', quantity: 1, selectedComplements: [], notes: null }],
+            items: [
+              {
+                productId: 'prod-1',
+                quantity: 1,
+                selectedComplements: [],
+                notes: null,
+              },
+            ],
           },
         ],
       };
 
-      await expect(service.createOrder(waiterUser, dto as any)).rejects.toThrow(BadRequestException);
+      await expect(service.createOrder(waiterUser, dto as any)).rejects.toThrow(
+        BadRequestException,
+      );
       expect(prisma.order.create).not.toHaveBeenCalled();
     });
 
@@ -397,12 +487,21 @@ describe('OrdersService', () => {
         plates: [
           {
             plateNumber: 1,
-            items: [{ productId: 'prod-1', quantity: 1, selectedComplements: [], notes: null }],
+            items: [
+              {
+                productId: 'prod-1',
+                quantity: 1,
+                selectedComplements: [],
+                notes: null,
+              },
+            ],
           },
         ],
       };
 
-      await expect(service.createOrder(waiterUser, dto as any)).rejects.toThrow(BadRequestException);
+      await expect(service.createOrder(waiterUser, dto as any)).rejects.toThrow(
+        BadRequestException,
+      );
       expect(prisma.order.create).not.toHaveBeenCalled();
     });
 
@@ -413,12 +512,21 @@ describe('OrdersService', () => {
         plates: [
           {
             plateNumber: 1,
-            items: [{ productId: 'prod-1', quantity: 1, selectedComplements: [], notes: null }],
+            items: [
+              {
+                productId: 'prod-1',
+                quantity: 1,
+                selectedComplements: [],
+                notes: null,
+              },
+            ],
           },
         ],
       };
 
-      await expect(service.createOrder(waiterUser, dto as any)).rejects.toThrow(BadRequestException);
+      await expect(service.createOrder(waiterUser, dto as any)).rejects.toThrow(
+        BadRequestException,
+      );
       expect(prisma.order.create).not.toHaveBeenCalled();
     });
   });

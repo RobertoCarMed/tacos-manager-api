@@ -14,7 +14,10 @@ import { AuthenticatedUser } from './interfaces/authenticated-user.interface';
 export class ProductsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async createProduct(user: AuthenticatedUser, createProductDto: CreateProductDto) {
+  async createProduct(
+    user: AuthenticatedUser,
+    createProductDto: CreateProductDto,
+  ) {
     this.ensureCookRole(user);
     this.validateComplements(createProductDto.complements);
 
@@ -74,7 +77,11 @@ export class ProductsService {
     return product;
   }
 
-  async updateProduct(user: AuthenticatedUser, id: string, updateProductDto: UpdateProductDto) {
+  async updateProduct(
+    user: AuthenticatedUser,
+    id: string,
+    updateProductDto: UpdateProductDto,
+  ) {
     this.ensureCookRole(user);
     this.validateComplements(updateProductDto.complements);
 
@@ -83,9 +90,15 @@ export class ProductsService {
     const updatedProduct = await this.prisma.product.update({
       where: { id },
       data: {
-        ...(updateProductDto.name !== undefined ? { name: updateProductDto.name.trim() } : {}),
-        ...(updateProductDto.price !== undefined ? { price: updateProductDto.price } : {}),
-        ...(updateProductDto.imageUrl !== undefined ? { imageUrl: updateProductDto.imageUrl } : {}),
+        ...(updateProductDto.name !== undefined
+          ? { name: updateProductDto.name.trim() }
+          : {}),
+        ...(updateProductDto.price !== undefined
+          ? { price: updateProductDto.price }
+          : {}),
+        ...(updateProductDto.imageUrl !== undefined
+          ? { imageUrl: updateProductDto.imageUrl }
+          : {}),
         ...(updateProductDto.complements !== undefined
           ? { complements: updateProductDto.complements }
           : {}),
@@ -124,11 +137,16 @@ export class ProductsService {
 
   private validateComplements(complements?: string[]): void {
     if (complements && complements.length > 3) {
-      throw new BadRequestException('A product can have a maximum of 3 complements');
+      throw new BadRequestException(
+        'A product can have a maximum of 3 complements',
+      );
     }
   }
 
-  private async ensureProductOwnership(id: string, taqueriaId: string): Promise<void> {
+  private async ensureProductOwnership(
+    id: string,
+    taqueriaId: string,
+  ): Promise<void> {
     const product = await this.prisma.product.findUnique({
       where: { id },
       select: {
@@ -142,7 +160,9 @@ export class ProductsService {
     }
 
     if (product.taqueriaId !== taqueriaId) {
-      throw new ForbiddenException('You cannot access products from another taqueria');
+      throw new ForbiddenException(
+        'You cannot access products from another taqueria',
+      );
     }
   }
 }
