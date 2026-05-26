@@ -1,12 +1,21 @@
-import 'dotenv/config';
 import { ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
-import { IoAdapter } from '@nestjs/platform-socket.io';
 import { AppModule } from './app.module';
+import { ConfiguredSocketIoAdapter } from './realtime/socket-io.adapter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  app.useWebSocketAdapter(new IoAdapter(app));
+
+  const config = app.get(ConfigService);
+
+  app.enableCors({
+    origin: config.get<string>('CORS_ORIGIN', '*'),
+    credentials: true,
+  });
+
+  app.useWebSocketAdapter(new ConfiguredSocketIoAdapter(app));
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -14,6 +23,8 @@ async function bootstrap() {
       transform: true,
     }),
   );
-  await app.listen(process.env.PORT ?? 3000);
+
+  const port = config.get<number>('PORT', 3000);
+  await app.listen(port);
 }
 bootstrap();

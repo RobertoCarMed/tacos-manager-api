@@ -14,12 +14,7 @@ import type { AuthenticatedSocket } from './interfaces/authenticated-socket.inte
 import type { OrderRealtimePayload } from './interfaces/order-payload.interface';
 import { RealtimeAuthGuard } from './realtime-auth.guard';
 
-@WebSocketGateway({
-  cors: {
-    origin: '*',
-    credentials: true,
-  },
-})
+@WebSocketGateway()
 export class RealtimeGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {

@@ -9,8 +9,10 @@ Plataforma SaaS multi-tenant para la administración operativa de taquerías. Ba
 - **PostgreSQL** — base de datos
 - **JWT (Passport)** — autenticación con Bearer tokens
 - **Socket.IO 4** (`@nestjs/websockets`, `@nestjs/platform-socket.io`) — WebSockets realtime
+- **`@nestjs/config`** — ConfigModule global, carga `.env.${NODE_ENV}` + `.env`, validación al arranque
 - **bcrypt** — hash de contraseñas
 - **class-validator / class-transformer** — validación y transformación de DTOs
+- **cross-env** — scripts cross-platform con NODE_ENV
 - **pnpm** — gestor de paquetes (invocar con `npx pnpm`)
 - **Docker** — PostgreSQL local (`docker-compose.yml`)
 
@@ -18,7 +20,9 @@ Plataforma SaaS multi-tenant para la administración operativa de taquerías. Ba
 
 ```bash
 # Desarrollo
-pnpm run start:dev       # servidor con watch mode
+pnpm run start:dev       # NODE_ENV=development, watch mode
+pnpm run start:qa        # NODE_ENV=qa (requiere build previo)
+pnpm run start:prod      # NODE_ENV=production (requiere build previo)
 
 # Base de datos
 pnpm prisma migrate dev  # aplicar migraciones en desarrollo
@@ -26,7 +30,6 @@ pnpm prisma studio       # GUI para explorar la BD
 
 # Build
 pnpm run build           # compilar a dist/
-pnpm run start:prod      # ejecutar producción
 
 # Calidad de código
 pnpm run lint            # ESLint
@@ -40,16 +43,25 @@ pnpm run test:cov        # coverage
 
 ## Variables de entorno
 
-```
-DATABASE_URL="postgresql://tacosmanager:tacosmanager@localhost:5432/tacosmanagerdb?schema=public"
-JWT_SECRET="tacosmanager-dev-jwt-secret-change-in-production"
-PORT=3000
-```
+El archivo activo depende de `NODE_ENV` — ver `.env.example` para la plantilla completa.
+
+| Variable | Requerida | Default | Descripción |
+|----------|-----------|---------|-------------|
+| `DATABASE_URL` | ✅ | — | Cadena de conexión PostgreSQL |
+| `JWT_SECRET` | ✅ | — | Clave secreta JWT |
+| `NODE_ENV` | No | `development` | Ambiente activo |
+| `JWT_EXPIRES_IN` | No | `1d` | Expiración del token |
+| `PORT` | No | `3000` | Puerto HTTP |
+| `CORS_ORIGIN` | No | `*` | Origen HTTP permitido |
+| `SOCKET_ORIGIN` | No | `*` | Origen Socket.IO permitido |
+
+Archivo de desarrollo local: `.env.development` (gitignoreado — copiar de `.env.example`)
 
 ## Arquitectura de módulos
 
 ```
 src/
+├── config/        # env.validation.ts — validación de vars al arranque
 ├── prisma/        # PrismaModule global (singleton)
 ├── auth/          # JWT, registro 2 fases, login, /auth/me
 ├── users/         # UsersService (acceso a datos, sin controller)
@@ -57,9 +69,10 @@ src/
 ├── orders/        # Órdenes append-only + cola de cocina
 └── realtime/      # Socket.IO Gateway — autenticación JWT + rooms multi-tenant
     ├── interfaces/authenticated-socket.interface.ts
-    ├── realtime-auth.guard.ts   # guard para @SubscribeMessage handlers
-    ├── realtime.gateway.ts      # OnGatewayConnection + eventos
-    └── realtime.module.ts
+    ├── realtime-auth.guard.ts      # guard para @SubscribeMessage handlers
+    ├── realtime.gateway.ts         # OnGatewayConnection + eventos
+    ├── realtime.module.ts
+    └── socket-io.adapter.ts        # CORS configurable vía SOCKET_ORIGIN
 ```
 
 Cada módulo sigue la estructura `module / controller / service / dto/ / interfaces/`.
@@ -147,12 +160,12 @@ Dentro de cada grupo: orden ASC por `priorityTimestamp`.
 | 4.2   | Cola de cocina FIFO                | ✅     |
 | 4.3   | Socket.IO Foundation               | ✅     |
 | 4.4   | Kitchen Realtime                   | ✅     |
-| 4.5   | React Native Socket Migration      | ⬜     |
+| 4.5   | React Native Socket Migration      | ✅     |
 | 4.5.6.1 | Backend Queue Rules              | ✅     |
-| 4.6.1 | Order Classification — Backend     | 🟡     |
-| 4.7–9 | Realtime avanzado + Performance    | ⬜     |
-| 5     | Analytics & Reportes               | ⬜     |
-| 6     | Infraestructura de producción      | ⬜     |
+| 4.6.1 | Order Classification — Backend     | ✅     |
+| 4.7   | Realtime Reliability               | ✅     |
+| 5.0.1 | Environment Strategy — Backend    | 🟡     |
+| 5.0.2 | Backend Deployment                 | ⬜     |
 
 ## Documentación
 

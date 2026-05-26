@@ -1,4 +1,5 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 
@@ -6,13 +7,8 @@ import { PrismaClient } from '@prisma/client';
 export class PrismaService extends PrismaClient implements OnModuleInit {
   private static isConnected = false;
 
-  constructor() {
-    const connectionString = process.env.DATABASE_URL;
-
-    if (!connectionString) {
-      throw new Error('DATABASE_URL is required to initialize Prisma.');
-    }
-
+  constructor(config: ConfigService) {
+    const connectionString = config.getOrThrow<string>('DATABASE_URL');
     super({
       adapter: new PrismaPg({ connectionString }),
     });
