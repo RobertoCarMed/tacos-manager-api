@@ -9,7 +9,14 @@
       "Bash(Select-Object -First 50)",
       "Bash(echo \"EXIT:$?\")",
       "Bash(Get-ChildItem -Recurse src -Include \"*.controller.ts\",\"*.dto.ts\",\"*.guard.ts\",\"*.decorator.ts\")",
-      "Bash(Select-Object -ExpandProperty FullName)"
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(git push *)",
+      "PowerShell(New-Item *)",
+      "Bash(git check-ignore *)",
+      "Bash(git restore *)",
+      "Bash(git submodule *)",
+      "PowerShell(Set-Location \"D:\\\\TacosManager\\\\Backend\\\\tacos-manager-api\"; npx pnpm run build; Write-Host \"EXIT: $LASTEXITCODE\")",
+      "PowerShell(git push *)"
     ]
   }
 }
