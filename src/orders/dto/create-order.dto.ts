@@ -52,16 +52,21 @@ export class CreateOrderDto {
 
   // Required for DINE_IN and TAKEAWAY
   @ValidateIf(
-    (o) => o.type === OrderType.DINE_IN || o.type === OrderType.TAKEAWAY,
+    (o: CreateOrderDto) =>
+      o.type === OrderType.DINE_IN || o.type === OrderType.TAKEAWAY,
   )
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsString()
   @IsNotEmpty()
   reference?: string;
 
   // Required for DELIVERY
-  @ValidateIf((o) => o.type === OrderType.DELIVERY)
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @ValidateIf((o: CreateOrderDto) => o.type === OrderType.DELIVERY)
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsString()
   @IsNotEmpty()
   deliveryAddress?: string;

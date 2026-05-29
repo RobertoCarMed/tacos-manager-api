@@ -7,7 +7,10 @@ export function validateEnv(
   const missing = required.filter((key) => !config[key]);
 
   if (missing.length > 0) {
-    const env = config['NODE_ENV'] || 'development';
+    const env =
+      typeof config['NODE_ENV'] === 'string'
+        ? config['NODE_ENV']
+        : 'development';
     throw new Error(
       `[Config] Missing required environment variables: ${missing.join(', ')}\n` +
         `  → Ensure .env.${env} (or .env) is present and defines all required variables.`,
