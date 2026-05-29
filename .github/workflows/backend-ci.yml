@@ -11,6 +11,12 @@ jobs:
     name: Lint · Build · Validate
     runs-on: ubuntu-latest
 
+    # prisma generate (postinstall) y prisma validate leen prisma.config.ts,
+    # que llama env('DATABASE_URL'). No se conecta a ninguna BD real en CI —
+    # el valor dummy satisface la resolución de la variable sin acceso a red.
+    env:
+      DATABASE_URL: postgresql://prisma:prisma@localhost:5432/ci_dummy
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
