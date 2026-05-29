@@ -105,7 +105,7 @@ export class OrdersService {
           o."priorityTimestamp" ASC
       `;
 
-      const orderIds = (orders as any[]).map((o) => o.id);
+      const orderIds = (orders as Array<{ id: string }>).map((o) => o.id);
 
       if (orderIds.length === 0) return [];
 
