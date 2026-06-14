@@ -60,8 +60,12 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
-      - name: Apply migrations to ephemeral DB
-        run: pnpm prisma migrate deploy
+      - name: Materialize schema on ephemeral DB
+        # `db push` sincroniza el schema actual a la BD sin depender del
+        # historial de migraciones. Es lo correcto para una BD efímera de
+        # tests: no probamos migraciones aquí, solo el comportamiento de la
+        # app contra el schema vigente.
+        run: pnpm prisma db push --skip-generate --accept-data-loss
 
       - name: Run BDD suite
         run: pnpm run test:bdd
