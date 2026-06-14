@@ -20,6 +20,7 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
+    "test:bdd": "cross-env NODE_ENV=test cucumber-js",
     "migrate:dev": "dotenv -e .env.development -- prisma migrate dev",
     "migrate:qa": "dotenv -e .env.qa -- prisma migrate deploy",
     "migrate:prod": "dotenv -e .env.production -- prisma migrate deploy",
@@ -50,6 +51,7 @@
     "socket.io": "^4.8.3"
   },
   "devDependencies": {
+    "@cucumber/cucumber": "^13.0.0",
     "@eslint/eslintrc": "^3.2.0",
     "@eslint/js": "^9.18.0",
     "@nestjs/cli": "^11.0.0",

@@ -1,0 +1,79 @@
+---
+name: BDD (acceptance.feature)
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - qa
+      - main
+  push:
+    branches:
+      - dev
+      - qa
+      - main
+
+jobs:
+  bdd:
+    name: Backend • BDD acceptance suite
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: tacosmanager_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tacosmanager_test
+      JWT_SECRET: ci-bdd-jwt-secret
+      JWT_EXPIRES_IN: 1h
+      SOCKET_ORIGIN: '*'
+
+    steps:
+      - name: Checkout (con submódulo docs)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - name: Setup Node.js LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          cache: 'pnpm'
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Materialize schema on ephemeral DB
+        # `db push` sincroniza el schema actual a la BD sin depender del
+        # historial de migraciones. Es lo correcto para una BD efímera de
+        # tests: no probamos migraciones aquí, solo el comportamiento de la
+        # app contra el schema vigente.
+        run: pnpm prisma db push --accept-data-loss
+
+      - name: Run BDD suite
+        run: pnpm run test:bdd
+
+      - name: Upload Cucumber reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cucumber-reports
+          path: reports/
+          if-no-files-found: ignore

@@ -169,9 +169,94 @@ Dentro de cada grupo: orden ASC por `priorityTimestamp`.
 
 ## Documentación
 
-Más detalle en `/docs/`:
+Más detalle en `/docs/` (submódulo Git → repo `tacosmanager-docs`):
 - `api-reference.md` — endpoints completos con ejemplos
 - `architecture.md` — decisiones arquitectónicas
 - `business-rules.md` — reglas de negocio
 - `feature-list.md` — features implementadas y roadmap
-- `readmap.md` — etapas futuras detalladas
+- `roadmap.md` — etapas futuras detalladas
+
+## Spec-Driven Development (SDD)
+
+Este repo consume **`tacosmanager-docs`** como Git Submodule en `docs/`. La fuente de verdad de specs, ADRs y contratos vive ahí — nunca dupliques nada en este repo.
+
+### Inicializar y actualizar el submódulo
+
+```bash
+# Primera vez en el clon:
+git submodule update --init --recursive
+
+# Sincronizar con el último commit de docs:main:
+git -C docs fetch origin
+git -C docs checkout main
+git -C docs pull origin main
+
+# Registrar el bump del puntero en este repo:
+git add docs
+git commit -m "chore(docs): bump submodule to latest main"
+```
+
+### Archivos clave en `docs/`
+
+| Archivo | Para qué |
+|---|---|
+| `docs/constitution.md` | 10 artículos no negociables (Multi-tenant, Append-only, Ownership, etc.) |
+| `docs/glossary.md` | Vocabulario canónico — úsalo en código, commits y conversación |
+| `docs/traceability.md` | Matriz `REQ-NNNN ↔ TEST ↔ código`. **No inventes REQ-IDs**. |
+| `docs/docs/adr/` | Decisiones arquitectónicas (`ADR-0001`..`ADR-0009`) |
+| `docs/specs/<feature>/` | `spec.md` + `plan.md` + `tasks.md` + `acceptance.feature` |
+| `docs/contracts/openapi.yaml` | Contrato REST vinculante |
+| `docs/contracts/asyncapi.yaml` | Contrato Socket.IO vinculante |
+
+### Branching
+
+`feature/* → dev → qa → main`. PRs nunca van directo a `main`. Conventional Commits. El cuerpo del commit DEBE incluir `Closes REQ-NNNN` cuando aplique.
+
+### Suite BDD (Cucumber sobre `acceptance.feature`)
+
+Los `*.feature` del submódulo se ejecutan como tests reales contra una BD efímera.
+
+```bash
+# Local (requiere Postgres corriendo, ver docker-compose.yml):
+NODE_ENV=test \
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/tacosmanager_test \
+JWT_SECRET=test-secret \
+pnpm run test:bdd
+```
+
+- Config: `cucumber.cjs` — apunta a `docs/specs/**/acceptance.feature`.
+- Infra: `test/features/{world,hooks}.ts` boota la app NestJS en proceso (puerto efímero) + truncate `BeforeAll`/`Before`.
+- Step defs por dominio: `test/features/steps/{auth,products,orders,kitchen,realtime}.steps.ts`.
+- CI: `.github/workflows/bdd.yml` corre la suite contra Postgres 16 efímero.
+- Reportes: `reports/cucumber.json` y `reports/cucumber.html` (publicados como artifact en CI).
+
+### Convención de nombres de tests (detectable por `traceability.md`)
+
+```ts
+// Backend (Jest)
+describe('REQ-0020: crear orden DINE_IN con reference', () => { ... });
+
+// O comentario inline arriba del it()
+it('returns 201 with full order payload', () => {
+  // @REQ-0020 @REQ-0026
+  ...
+});
+```
+
+```gherkin
+# Gherkin: tag justo encima del Escenario
+@REQ-0020
+Escenario: WAITER crea orden DINE_IN con reference
+```
+
+Un test PUEDE cubrir múltiples REQ — listarlos todos.
+
+### Reglas duras heredadas de `constitution.md`
+
+- **Artículo I — Multi-tenancy**: toda query filtra por `taqueriaId`. El backend nunca acepta `taqueriaId` del cliente.
+- **Artículo III — Ownership**: toda ruta lleva `JwtAuthGuard` salvo `/`, `/health`, `/auth/login`, `/auth/register`.
+- **Artículo IV — Realtime**: toda mutación de orden emite el evento Socket.IO correspondiente.
+- **Artículo V — Append-only**: items históricos son inmutables. Nunca tocar `quantity`/`productId` de un item ya persistido.
+- **Artículo IX — No leakage**: respuestas API nunca incluyen `password`, `passwordHash`, ni datos de otra taquería.
+
+Cualquier cambio que tope estas reglas requiere ADR previo en `docs/docs/adr/`.
