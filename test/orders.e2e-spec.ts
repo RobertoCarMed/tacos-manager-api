@@ -6,6 +6,30 @@ import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 
+interface AuthBody {
+  accessToken: string;
+  user: { taqueriaId: string };
+  taqueria: { restaurantCode: string };
+}
+
+interface ProductBody {
+  id: string;
+}
+
+interface OrderItemBody {
+  id: string;
+  unitPrice: string | null;
+}
+
+interface OrderPlateBody {
+  items: OrderItemBody[];
+}
+
+interface OrderBody {
+  id: string;
+  plates: OrderPlateBody[];
+}
+
 describe('Orders — unitPrice snapshot (ticket-printing)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
@@ -46,9 +70,10 @@ describe('Orders — unitPrice snapshot (ticket-printing)', () => {
         createNewTaqueria: true,
         taqueriaData: {},
       });
-    cookToken = cookRes.body.accessToken;
-    taqueriaId = cookRes.body.user.taqueriaId;
-    const restaurantCode = cookRes.body.taqueria.restaurantCode as string;
+    const cookBody = cookRes.body as AuthBody;
+    cookToken = cookBody.accessToken;
+    taqueriaId = cookBody.user.taqueriaId;
+    const restaurantCode = cookBody.taqueria.restaurantCode;
 
     const waiterRes = await request(app.getHttpServer())
       .post('/auth/register')
@@ -61,13 +86,13 @@ describe('Orders — unitPrice snapshot (ticket-printing)', () => {
         confirmJoinExistingTaqueria: true,
         selectedRestaurantCode: restaurantCode,
       });
-    waiterToken = waiterRes.body.accessToken;
+    waiterToken = (waiterRes.body as AuthBody).accessToken;
 
     const productRes = await request(app.getHttpServer())
       .post('/products')
       .set('Authorization', `Bearer ${cookToken}`)
       .send({ name: 'Coca', price: PRODUCT_PRICE });
-    productId = productRes.body.id;
+    productId = (productRes.body as ProductBody).id;
   });
 
   afterAll(async () => {
@@ -91,13 +116,11 @@ describe('Orders — unitPrice snapshot (ticket-printing)', () => {
         .send({
           type: 'DINE_IN',
           reference: 'Mesa 1',
-          plates: [
-            { plateNumber: 1, items: [{ productId, quantity: 3 }] },
-          ],
+          plates: [{ plateNumber: 1, items: [{ productId, quantity: 3 }] }],
         })
         .expect(201);
 
-      const item = res.body.plates[0].items[0];
+      const item = (res.body as OrderBody).plates[0].items[0];
       expect(Number(item.unitPrice)).toBe(PRODUCT_PRICE);
     });
 
@@ -109,21 +132,18 @@ describe('Orders — unitPrice snapshot (ticket-printing)', () => {
         .send({
           type: 'DINE_IN',
           reference: 'Mesa 1b',
-          plates: [
-            { plateNumber: 1, items: [{ productId, quantity: 1 }] },
-          ],
+          plates: [{ plateNumber: 1, items: [{ productId, quantity: 1 }] }],
         })
         .expect(201);
 
-      const orderId = createRes.body.id as string;
+      const orderId = (createRes.body as OrderBody).id;
       const getRes = await request(app.getHttpServer())
         .get(`/orders/${orderId}`)
         .set('Authorization', `Bearer ${waiterToken}`)
         .expect(200);
 
-      expect(Number(getRes.body.plates[0].items[0].unitPrice)).toBe(
-        PRODUCT_PRICE,
-      );
+      const item = (getRes.body as OrderBody).plates[0].items[0];
+      expect(Number(item.unitPrice)).toBe(PRODUCT_PRICE);
     });
   });
 
@@ -140,9 +160,9 @@ describe('Orders — unitPrice snapshot (ticket-printing)', () => {
         })
         .expect(201);
 
-      const orderId = createRes.body.id as string;
-      const originalUnitPrice = createRes.body.plates[0].items[0]
-        .unitPrice as string;
+      const createBody = createRes.body as OrderBody;
+      const orderId = createBody.id;
+      const originalUnitPrice = createBody.plates[0].items[0].unitPrice;
 
       const appendRes = await request(app.getHttpServer())
         .patch(`/orders/${orderId}`)
@@ -152,11 +172,11 @@ describe('Orders — unitPrice snapshot (ticket-printing)', () => {
         })
         .expect(200);
 
-      const newItem = appendRes.body.plates[1].items[0];
-      expect(Number(newItem.unitPrice)).toBe(PRODUCT_PRICE);
-
-      const originalItem = appendRes.body.plates[0].items[0];
-      expect(originalItem.unitPrice).toBe(originalUnitPrice);
+      const appendBody = appendRes.body as OrderBody;
+      expect(Number(appendBody.plates[1].items[0].unitPrice)).toBe(
+        PRODUCT_PRICE,
+      );
+      expect(appendBody.plates[0].items[0].unitPrice).toBe(originalUnitPrice);
     });
   });
 
@@ -173,9 +193,9 @@ describe('Orders — unitPrice snapshot (ticket-printing)', () => {
         })
         .expect(201);
 
-      const orderId = createRes.body.id as string;
-      const snapshotPrice = createRes.body.plates[0].items[0]
-        .unitPrice as string;
+      const createBody = createRes.body as OrderBody;
+      const orderId = createBody.id;
+      const snapshotPrice = createBody.plates[0].items[0].unitPrice;
 
       const NEW_PRICE = 99;
       await request(app.getHttpServer())
@@ -189,12 +209,10 @@ describe('Orders — unitPrice snapshot (ticket-printing)', () => {
         .set('Authorization', `Bearer ${waiterToken}`)
         .expect(200);
 
-      expect(getRes.body.plates[0].items[0].unitPrice).toBe(snapshotPrice);
-      expect(Number(getRes.body.plates[0].items[0].unitPrice)).not.toBe(
-        NEW_PRICE,
-      );
+      const item = (getRes.body as OrderBody).plates[0].items[0];
+      expect(item.unitPrice).toBe(snapshotPrice);
+      expect(Number(item.unitPrice)).not.toBe(NEW_PRICE);
 
-      // Restaurar precio para tests siguientes
       await request(app.getHttpServer())
         .patch(`/products/${productId}`)
         .set('Authorization', `Bearer ${cookToken}`)
@@ -215,9 +233,8 @@ describe('Orders — unitPrice snapshot (ticket-printing)', () => {
         })
         .expect(201);
 
-      const itemId = createRes.body.plates[0].items[0].id as string;
+      const itemId = (createRes.body as OrderBody).plates[0].items[0].id;
 
-      // Simular item legacy vaciando unitPrice
       await prisma.item.update({
         where: { id: itemId },
         data: { unitPrice: null },
@@ -226,7 +243,6 @@ describe('Orders — unitPrice snapshot (ticket-printing)', () => {
       const nullItem = await prisma.item.findUnique({ where: { id: itemId } });
       expect(nullItem!.unitPrice).toBeNull();
 
-      // Ejecutar backfill (mismo SQL de la migración)
       await prisma.$executeRaw`
         UPDATE "Item"
         SET "unitPrice" = (SELECT p.price FROM "Product" p WHERE p.id = "Item"."productId")
@@ -251,21 +267,20 @@ describe('Orders — unitPrice snapshot (ticket-printing)', () => {
         })
         .expect(201);
 
-      const itemId = createRes.body.plates[0].items[0].id as string;
-      const priceBefore = (
-        await prisma.item.findUnique({ where: { id: itemId } })
-      )!.unitPrice!.toString();
+      const itemId = (createRes.body as OrderBody).plates[0].items[0].id;
+      const priceBefore = (await prisma.item.findUnique({
+        where: { id: itemId },
+      }))!.unitPrice!.toString();
 
-      // Re-ejecutar el backfill no debe alterar unitPrice ya fijado
       await prisma.$executeRaw`
         UPDATE "Item"
         SET "unitPrice" = (SELECT p.price FROM "Product" p WHERE p.id = "Item"."productId")
         WHERE "unitPrice" IS NULL
       `;
 
-      const priceAfter = (
-        await prisma.item.findUnique({ where: { id: itemId } })
-      )!.unitPrice!.toString();
+      const priceAfter = (await prisma.item.findUnique({
+        where: { id: itemId },
+      }))!.unitPrice!.toString();
       expect(priceAfter).toBe(priceBefore);
     });
   });
