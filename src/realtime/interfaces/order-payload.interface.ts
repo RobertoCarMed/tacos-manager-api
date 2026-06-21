@@ -1,9 +1,10 @@
-import { OrderStatus, OrderType } from '@prisma/client';
+import { Prisma, OrderStatus, OrderType } from '@prisma/client';
 
 export interface OrderItemPayload {
   id: string;
   productId: string;
   quantity: number;
+  unitPrice: Prisma.Decimal | null;
   selectedComplements: string[];
   notes: string | null;
   isNew: boolean;

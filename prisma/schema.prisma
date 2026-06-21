@@ -111,6 +111,7 @@ model Plate {
 model Item {
   id                  String   @id @default(uuid())
   quantity            Int
+  unitPrice           Decimal? @db.Decimal(10, 2)
   selectedComplements String[]
   notes               String?
   isNew               Boolean  @default(false)
