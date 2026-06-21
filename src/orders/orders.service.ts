@@ -35,7 +35,7 @@ export class OrdersService {
       createOrderDto.deliveryAddress,
     );
 
-    await this.validateProductsOwnership(
+    const priceMap = await this.validateProductsOwnership(
       user.taqueriaId,
       createOrderDto.plates,
     );
@@ -59,6 +59,7 @@ export class OrdersService {
               create: plate.items.map((item) => ({
                 productId: item.productId,
                 quantity: item.quantity,
+                unitPrice: priceMap.get(item.productId),
                 selectedComplements: item.selectedComplements ?? [],
                 notes: item.notes ?? null,
                 isNew: false,
@@ -200,6 +201,7 @@ export class OrdersService {
     // Only apply when new plates are being added (metadata-only changes keep current status)
     let newStatus = existingOrder.status;
     let updatePriorityTimestamp = false;
+    let priceMap: Map<string, number> | undefined;
 
     if (updateOrderDto.plates) {
       if (
@@ -245,7 +247,7 @@ export class OrdersService {
         );
       }
 
-      await this.validateProductsOwnership(
+      priceMap = await this.validateProductsOwnership(
         user.taqueriaId,
         updateOrderDto.plates,
       );
@@ -278,6 +280,7 @@ export class OrdersService {
                 create: plate.items.map((item) => ({
                   productId: item.productId,
                   quantity: item.quantity,
+                  unitPrice: priceMap!.get(item.productId),
                   selectedComplements: item.selectedComplements ?? [],
                   notes: item.notes ?? null,
                   isNew: true,
@@ -378,7 +381,7 @@ export class OrdersService {
   private async validateProductsOwnership(
     taqueriaId: string,
     plates: Array<{ items: Array<{ productId: string }> }>,
-  ) {
+  ): Promise<Map<string, number>> {
     const productIds = [
       ...new Set(
         plates.flatMap((plate) => plate.items.map((item) => item.productId)),
@@ -389,7 +392,7 @@ export class OrdersService {
         id: { in: productIds },
         taqueriaId,
       },
-      select: { id: true },
+      select: { id: true, price: true },
     });
 
     if (products.length !== productIds.length) {
@@ -397,6 +400,8 @@ export class OrdersService {
         'One or more products are invalid for this taqueria',
       );
     }
+
+    return new Map(products.map((p) => [p.id, p.price]));
   }
 
   private orderSelect() {
@@ -425,6 +430,7 @@ export class OrdersService {
               id: true,
               productId: true,
               quantity: true,
+              unitPrice: true,
               selectedComplements: true,
               notes: true,
               isNew: true,
